@@ -16,6 +16,7 @@ import { ProfileView } from "@/components/flux/views/profile";
 import { ChatView } from "@/components/flux/views/chat";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useFluxTheme } from "@/components/flux/theme-provider";
+import { CommandPalette } from "@/components/flux/command-palette";
 
 export default function Home() {
   const view = useFlux((s) => s.view);
@@ -84,6 +85,7 @@ export default function Home() {
       </div>
       <MobileNav />
       <ChatFab />
+      <CommandPalette />
     </div>
   );
 }

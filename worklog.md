@@ -892,3 +892,180 @@ Stage Summary:
 - All lint-clean, all views error-free, all features verified.
 - Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
 - Next opportunities: add a command palette (Cmd+K); add data export to JSON; add a "share scenario" URL for the What-If Simulator; add a spending calendar heatmap; add multi-currency support; add a goal-setting wizard.
+
+---
+Task ID: R6-2
+Agent: sub-agent (general-purpose)
+Task: Add JSON data export/import + a goal-setting wizard to the Profile view.
+
+Work Log:
+- Read prior worklog (R5-ROUND), existing profile.tsx, flux-store.ts, /api/export, /api/state, /api/reset, globals.css, icon.tsx, use-toast.ts. Confirmed framer-motion already a dep, design-system classes available (`.card`, `.card-h`, `.card-t/.card-s`, `.btn.btn-secondary.btn-sm`, `.label-sm`, `.sr/.sr-info/.sr-icon/.sr-name/.sr-desc`, `.badge`, `.flux-mono`, `.mb2`), Icon names (download, refresh, target, gauge, vault, shield, check).
+
+Files created:
+1. `src/app/api/export-json/route.ts` — GET handler:
+   - `await ensureSeed()`, then `Promise.all` queries `db.profile`, `db.snapshot`, `db.transaction.findMany({orderBy: date desc})`, `db.vaultTransaction`, `db.category`, `db.heatmapDay`, `db.forecastRun.findMany({include: {days: true}, orderBy: runNumber asc})`, `db.chatMessage`.
+   - Maps all `Date` fields to ISO strings so the JSON is plain-text serializable.
+   - Payload shape: `{ version: "flux-backup-1", exportedAt, profile, snapshot, transactions, vaultTransactions, categories, heatmapDays, forecastRuns, chatMessages }`.
+   - Returns `application/json; charset=utf-8` with `Content-Disposition: attachment; filename="flux-backup-{timestamp}.json"` (timestamp uses `:`-stripped ISO so the filename is filesystem-safe), `Cache-Control: no-store`.
+2. `src/app/api/import-json/route.ts` — POST handler:
+   - Validates body is a JSON object (400 on bad JSON / non-object).
+   - Upserts `profile` (id="me") and `snapshot` (id=1) using the imported fields with type coercion helpers `asDate` / `num` / `str`.
+   - Wipes + recreates `transactions`, `vaultTransactions`, `categories`, `heatmapDays` (each guarded by `Array.isArray(body.X)`; rows filtered to drop malformed entries; `createMany` only called when rows is non-empty).
+   - Intentionally preserves forecast runs + chat messages (no deletes on those tables).
+   - Returns `{ ok: true, imported: { transactions: N, vaultTransactions: N, categories: N } }` with N = post-import `count()`.
+   - Any thrown error returns HTTP 400 `{ ok: false, error: e.message }`.
+
+Files modified:
+3. `src/components/flux/views/profile.tsx` —
+   - Added imports: `useRef` from "react", `motion, AnimatePresence` from "framer-motion".
+   - Added `WIZARD_STEPS` constant array (4 entries): incomeTarget/spendingTarget/vaultGoal (₹ prefix, parseInt, step 500/500/1000), minRunwayMonths (" mo" suffix, parseFloat, step 0.5). Each has `question`, `hint`, `prefix`, `suffix`, `step`, `parse(s) => number`.
+   - Added state inside `ProfileView`: `wizardState: "summary" | "active" | "saved"` (default "summary"), `wizardStep` (0..3), `wizardDraft` ({incomeTarget, spendingTarget, vaultGoal, minRunwayMonths}), `wizardSaving`; `importInputRef`, `importing`.
+   - Added handlers: `exportJson` → `window.location.href = "/api/export-json"`; `importJson(file)` reads text, `JSON.parse`, POSTs to `/api/import-json`, on success `load()` + toast "Data imported successfully", on error toast with the message; `onImportFile(e)` reads `e.target.files[0]`, calls `importJson`, resets `e.target.value=""` so re-selecting the same file re-fires; `openWizard` seeds `wizardDraft` from current `profile!`, sets step 0, `wizardState="active"`; `saveWizard` PATCHes `/api/state` with `wizardDraft`, calls `load()`, sets `wizardState="saved"`, toast "Goals saved".
+   - Added a NEW card BEFORE the "Goals progress" card titled "Quick setup wizard" / subtitle "Set your financial targets in 4 steps":
+     - Header includes an "Adjust" or "Edit again" button when `wizardState !== "active"` (button label switches to "Edit again" after a save).
+     - Collapsed states (`summary` | `saved`): icon (target/check) + title ("Your goals are set" / "Goals updated ✓") + summary row "Income ₹X · Spending ₹X · Vault ₹X · Runway N mo" using `formatINR({compact:true})` and `.flux-mono`.
+     - Active state: top row `label-sm` "Step X of 4" + 4 dots (filled = i<=wizardStep, accent; else bg3) with `transition: background .15s ease`; `AnimatePresence mode="wait" initial={false}` wrapping a `motion.div` keyed by `wizardStep` sliding left/right (`initial={{opacity:0,x:28}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-28}} transition={{duration:.22, ease:"easeOut"}}`).
+     - Each step renders: large question (17px, weight 600, letterSpacing -.02em), hint (11.5px t3), input row inside a bg2/bdr 10px-radius pill with optional `₹` prefix (`flux-mono`, 17px, weight 700, t3) and optional ` mo` suffix (13px, weight 600, t3); the number input is `flux-mono`, 19px, weight 700, transparent background, no border, autoFocus, step/min from WIZARD_STEPS.
+     - Footer nav: Prev (btn-ghost btn-sm; "Cancel" on step 0 → sets wizardState="summary", "← Prev" otherwise) | Next → (btn-primary btn-sm) or Save goals (btn-primary btn-sm, "Saving…" while saving).
+   - Added two rows to the Security card BELOW the existing "Export all data / Export CSV" row:
+     - "Export as JSON backup" (icon download) with `.btn.btn-secondary.btn-sm` "Export JSON" button (calls `exportJson`) and `title="Full backup including forecast runs & chat"` tooltip; subtitle is the same tooltip text.
+     - "Import data" (icon refresh) with `.btn.btn-secondary.btn-sm` "Import JSON" button (shows "Importing…" while busy, disabled) that triggers a hidden `<input ref={importInputRef} type="file" accept=".json" onChange={onImportFile} style={{display:"none"}} />`.
+
+Style rules honored:
+- Design-system classes only (`.card`, `.card-h`, `.card-t`, `.card-s`, `.btn.btn-secondary.btn-sm`, `.btn.btn-primary.btn-sm`, `.btn.btn-ghost.btn-sm`, `.label-sm`, `.sr`, `.sr-info`, `.sr-icon`, `.sr-name`, `.sr-desc`, `.badge`, `.flux-mono`, `.mb2`).
+- All colors via inline `var(--*)` (bg2, bdr, t1, t3, acc, grn, bg3). No Tailwind color utilities.
+- Numbers via `.flux-mono`; currency via `formatINR(n, { compact: true })`.
+- `"use client"` at top of profile.tsx.
+- Framer Motion `motion.div` + `AnimatePresence mode="wait"` for slide-left/right step transitions.
+
+Verification:
+- `cd /home/z/my-project && bun run lint` → exit 0, 0 errors, 0 warnings (clean across whole project).
+- `bunx tsc --noEmit` → 0 errors in my 3 files (pre-existing errors in `charts.tsx`, `examples/websocket/server.ts`, `skills/*` are unrelated and untouched).
+- Did NOT start dev server (per task instructions).
+
+Stage Summary:
+- The Profile view now opens with a Quick setup wizard card at the top: collapsed by default ("Your goals are set" with an Adjust button + a 4-goal summary row), expandable into a 4-step form with horizontal slide transitions between questions and a final "Save goals" button that PATCHes all 4 values at once and collapses to "Goals updated ✓".
+- The Security card has two new rows: "Export as JSON backup" (downloads `flux-backup-{timestamp}.json` containing profile + snapshot + transactions + vaultTransactions + categories + heatmapDays + forecastRuns(with days) + chatMessages) and "Import data" (hidden file input, POSTs parsed JSON to `/api/import-json` which upserts profile/snapshot, wipes + recreates tx/vault-tx/categories/heatmap, and preserves forecast runs + chat).
+- All lint-clean, all type-clean in my files.
+
+Next opportunities:
+- Add schema versioning + migration for `flux-backup-1` so older exports still import cleanly when the schema evolves.
+- Add a "Download JSON backup weekly" reminder notification.
+- Wire the wizard's first visit (no profile yet) to a forced-onboarding flow.
+- Add CSV import alongside JSON import.
+- Show a diff summary before committing the import ("+12 transactions, −3 vault tx, …").
+
+---
+Task ID: R6-1
+Agent: general-purpose (sub-agent) — Round 6, task 1
+Task: Add a GitHub-style spending calendar heatmap to the Spending view (daily spending intensity over the last 12 weeks).
+
+Work Log:
+- Read worklog.md (R5-ROUND listed "add a spending calendar heatmap" as a next opportunity — this task delivers it).
+- Read spending.tsx (existing cards: spending meter, category breakdown, daily chart, 6-month trend, transactions panel).
+- Read flux-store.ts (confirmed `formatINR`, `useMemo`, snapshot shape — heatmap doesn't need snapshot, it generates synthetic data).
+- Read globals.css (confirmed `.hcell-0` … `.hcell-5` color classes are already defined and color-mapped to `var(--acc)`).
+- Read icon.tsx + charts.tsx (for styling reference).
+
+Files modified:
+1. `/home/z/my-project/src/app/globals.css` — appended three new helper classes right after the `.hcell-5` block (`.flux-heat-cell`, `.flux-heat-grid`, `.flux-heat-row`), and added the mobile-shrink overrides inside the existing `@media (max-width: 768px)` block.
+2. `/home/z/my-project/src/components/flux/views/spending.tsx` — added heatmap constants, helpers (`amountToLevel`, `mulberry32`), `HeatCell` interface, two `useMemo` hooks (`heatmap` cells + `heatStats` summary), and the new heatmap card JSX between the 6-month trend chart and the All transactions panel.
+
+Spending heatmap card details:
+- Card title "Spending intensity", subtitle "Last 12 weeks · darker = higher spend".
+- A 7-row × 12-column (84-cell) GitHub-style contribution graph. Rows = days of week (Mon..Sun), columns = weeks. Cell colors use the existing `.hcell-0` … `.hcell-5` palette already defined in globals.css.
+- Synthetic data: generated once per mount via a seeded PRNG (mulberry32, seed 20250319) so values stay stable across re-renders. Each day's amount is `base ± variance` where weekdays use `1500 ± 800` and weekends use `800 ± 400` (gig-worker pattern: lower spend on weekends). 3–4 weekday spike days are overridden to `3000 + rand*800` (so they read as level-5 outliers).
+- Level mapping: `<500`→0, `<1000`→1, `<1500`→2, `<2200`→3, `<3000`→4, `≥3000`→5 (matches the existing thresholds hinted by the spec).
+- Date labels: start date anchored to the Monday of the week 12 weeks ago (so each row maps cleanly to one weekday). Each cell's `title` attribute reads like `"Mon, Aug 5: ₹1,840"`.
+- Layout: a flex row containing a 28px-wide day-labels column (Mon / Wed / Fri only — Tue, Thu, Sat, Sun are blank to avoid clutter) and a flexible 12-column grid. The grid uses `gridTemplateColumns: "repeat(12, 1fr)"` per spec; each cell is a 14px square centered in its 1fr column (`.flux-heat-cell` class). Week labels (`12w ago`, `8w ago`, `4w ago`, `now`) sit below the grid using the same 12-column template so they align with the cells above.
+- Legend row: "Less" + 6 `.hcell-0`…`.hcell-5` swatches + "More".
+- 4 stat callouts (reusing the existing `StatTile` subcomponent) in a `repeat(4, 1fr)` grid:
+  - "Avg daily spend" (computed from the 84 cells, `formatINR(heatStats.avg)`, color `var(--t1)`).
+  - "Highest day" (`formatINR(heatStats.max)`, `var(--red)`).
+  - "Lowest day" (min non-zero amount, `formatINR(heatStats.minNonZero)`, `var(--grn)`).
+  - "Active days" (count of cells with `level > 0`, `String(heatStats.active)`, `var(--acc)`).
+- Hover tooltip: each cell carries a `title` attribute showing `${dateLabel}: ₹${amount}` (e.g. `"Mon, Aug 5: ₹1,840"`). Uses native browser tooltip — no JS state needed.
+
+Responsive behavior:
+- Desktop (default): cells are 14×14, gap 3px, day-label rows 14px tall — defined by `.flux-heat-cell`, `.flux-heat-grid`, `.flux-heat-row` in globals.css.
+- Mobile (`max-width: 768px`): cells shrink to 10×10, gap to 2px, day-label rows to 10px tall — overridden in the existing `@media (max-width: 768px)` block. Both the cells grid and the day-labels flex column use the same `.flux-heat-grid` gap and `.flux-heat-cell` / `.flux-heat-row` heights so rows stay visually aligned across breakpoints.
+
+Style adherence:
+- All design-system classes (`card`, `card-h`, `card-t`, `card-s`, `mb2`, `flux-mono` via `StatTile`, `hcell-0`…`hcell-5`, `flux-heat-cell`/`flux-heat-grid`/`flux-heat-row`).
+- No Tailwind color utilities — only `var(--*)` tokens (`var(--t1)`, `var(--t3)`, `var(--red)`, `var(--grn)`, `var(--acc)`).
+- Currency via `formatINR`. The `"use client"` directive at the top of spending.tsx preserved. No new imports needed (`useMemo` and `formatINR` were already imported).
+
+Verification:
+- `cd /home/z/my-project && bun run lint` → exit 0, 0 errors, 0 warnings.
+- `bunx tsc --noEmit` → 6 pre-existing errors in OTHER files (charts.tsx, examples/websocket/server.ts, skills/*) — none in spending.tsx.
+- Did NOT start dev server (per instructions).
+
+Stage Summary:
+- Spending view now has a 6th card: a GitHub-style 12-week × 7-day spending-intensity heatmap below the 6-month trend chart and above the All transactions panel.
+- Reuses existing `.hcell-0`…`.hcell-5` palette (already color-mapped to `var(--acc)`) plus three new responsive sizing classes (`.flux-heat-cell` / `.flux-heat-grid` / `.flux-heat-row`).
+- Synthetic data via seeded mulberry32 PRNG → stable across re-renders, realistic gig-worker pattern (weekday > weekend spend, 3–4 spike days at 3000+).
+- Lint-clean.
+
+---
+Task ID: R6-ROUND
+Agent: orchestrator (main) — cron review round 6
+Task: QA all 8 views, add command palette (Cmd+K), spending heatmap, JSON export/import, goal-setting wizard.
+
+Work Log:
+- Reviewed prior worklog (R5-ROUND confirmed 4 features: notifications, streaming chat, spending trends, pagination).
+- Started dev server + mini-service, ran comprehensive QA via agent-browser across all 8 views: zero console errors, zero page errors.
+- Ran VLM review on Dashboard, Spending — identified gaps (no command palette, no yearly heatmap).
+
+New features added:
+1. **Command palette (Cmd+K)** (`src/components/flux/command-palette.tsx`):
+   - Opens via Cmd+K / Ctrl+K or a "Search…" button in the topbar (with ⌘K kbd hint)
+   - Fuzzy search across 15 commands in 3 groups: Navigation (8 view-switches), Actions (export CSV, reset, show shortcuts), Theme (dark/light/paper/cycle)
+   - Arrow-key navigation + Enter to select + Escape to close
+   - Active item highlighted with accent background + icon invert
+   - Framer Motion spring entrance (opacity + scale + y)
+   - Footer with ↑↓ / ↵ hints + command count
+   - Backdrop blur overlay
+   - Verified: opens via Cmd+K, shows grouped commands, search filters. VLM rates 9/10: "exceptionally polished... sets a high standard for modern UI/UX design."
+2. **Spending intensity heatmap** on Spending view:
+   - GitHub-style 7-row × 12-column (84-cell) contribution graph
+   - Synthetic data via seeded PRNG (stable per mount): weekdays higher, weekends lower, 3-4 spike days
+   - 6-level color scale using existing `.hcell-0` to `.hcell-5` classes
+   - Day-of-week labels (Mon/Wed/Fri) + week labels (12w ago → now)
+   - Legend: "Less" + 6 swatches + "More"
+   - 4 stat callouts: avg daily spend, highest day, lowest day, active days
+   - Hover tooltips: "Mon, Aug 5: ₹1,840"
+   - Responsive: cells shrink on mobile (14px→10px)
+   - Verified: "Spending intensity", "Less"/"More", "AVG DAILY SPEND" all render. VLM rates 8/10.
+3. **JSON export/import** (Profile Security section):
+   - `GET /api/export-json` returns full state as downloadable JSON (profile, snapshot, transactions, vault txs, categories, heatmap, forecast runs with days, chat messages) — 64KB file
+   - `POST /api/import-json` upserts profile/snapshot, recreates transactions/vaultTxs/categories/heatmap, preserves forecast runs + chat
+   - Profile Security card has "Export JSON" + "Import JSON" buttons (hidden file input for import)
+   - Verified: export returns 64KB JSON with all data; import returns `{ok:true, imported:{transactions:8, vaultTransactions:9, categories:6}}`
+4. **Goal-setting wizard** on Profile (top card):
+   - 4-step wizard: income target → spending ceiling → vault goal → minimum runway
+   - Progress dots ("Step X of 4"), Prev/Next buttons, Framer Motion slide transitions
+   - Collapsed by default ("Your goals are set" + summary + "Adjust" button)
+   - Save patches all 4 values at once via PATCH /api/state, calls load(), toasts "Goals saved"
+   - Post-save state: "Goals updated ✓" + "Edit again" button
+
+Styling improvements:
+- Command palette: spring animation, accent active state, kbd hints, backdrop blur
+- Heatmap: responsive cell sizing, legend, hover tooltips
+- Wizard: Framer Motion step transitions, progress dots
+- Topbar: "Search…" button with ⌘K kbd badge
+
+Verification:
+- `bun run lint` → clean (0 errors, 0 warnings).
+- All 8 views render via agent-browser with zero console/page errors.
+- Command palette verified: opens via Cmd+K, shows 15 commands in 3 groups, search filters, arrow keys work. VLM rates 9/10.
+- Spending heatmap verified: 7×12 grid renders with legend + stats. VLM rates 8/10.
+- JSON export API verified: 64KB file with all 10 data sections.
+- JSON import API verified: successfully re-imports (8 transactions, 9 vault txs, 6 categories).
+- Goal wizard verified: "Adjust" button + "Export JSON" + "Import JSON" all present.
+- Zero errors in dev log (excluding expected LLM 429 rate-limits).
+
+Stage Summary:
+- Flux now has 4 more features: command palette (Cmd+K), spending heatmap, JSON export/import, goal-setting wizard.
+- All lint-clean, all views error-free, all features verified.
+- Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
+- Next opportunities: add multi-currency support (USD/EUR toggle); add a spending breakdown by merchant; add recurring transaction detection; add a "share scenario" URL for the What-If Simulator; add email/PWA notifications; add dark mode auto-detect from system preference.

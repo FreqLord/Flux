@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useFlux, formatINR, runwayMonths, type FluxProfile } from "@/store/flux-store";
 import { Icon } from "@/components/flux/icon";
 import { useFluxTheme, type FluxTheme, type FluxLang } from "@/components/flux/theme-provider";
@@ -35,6 +36,25 @@ const GOAL_META: Record<
   vaultGoal:        { icon: "vault",  name: "Safety Vault target",     desc: "Emergency fund goal",            step: 1000, min: 0 },
   minRunwayMonths:  { icon: "shield", name: "Minimum runway",          desc: "Alert threshold in months",      suffix: " mo", step: 0.5, min: 0 },
 };
+
+/* ── Quick setup wizard steps (4-step goal-setting flow) ── */
+type WizardStepKey = GoalKey;
+type WizardStep = {
+  key: WizardStepKey;
+  question: string;
+  hint: string;
+  prefix?: string;
+  suffix?: string;
+  step: number;
+  parse: (s: string) => number;
+};
+
+const WIZARD_STEPS: WizardStep[] = [
+  { key: "incomeTarget",   question: "What's your monthly income target?",   hint: "Aim a bit above your typical month.", prefix: "₹", step: 500,  parse: (s) => parseInt(s, 10) },
+  { key: "spendingTarget", question: "What's your monthly spending ceiling?", hint: "Cap expenses to protect your surplus.", prefix: "₹", step: 500,  parse: (s) => parseInt(s, 10) },
+  { key: "vaultGoal",      question: "What's your safety vault goal?",       hint: "3–6 months of expenses is ideal.",   prefix: "₹", step: 1000, parse: (s) => parseInt(s, 10) },
+  { key: "minRunwayMonths", question: "What's your minimum runway (months)?", hint: "Alert me if I drop below this.",    suffix: " mo", step: 0.5, parse: (s) => parseFloat(s) },
+];
 
 function formatGoal(key: GoalKey, p: FluxProfile): string {
   if (key === "minRunwayMonths") {
@@ -78,6 +98,24 @@ export function ProfileView() {
   });
 
   const [busy, setBusy] = useState(false); // for export/reset/delete
+
+  // ── Quick setup wizard state ──
+  // "summary" → collapsed ("Your goals are set" + Adjust)
+  // "active"  → wizard open with 4 steps
+  // "saved"   → just-saved collapsed state ("Goals updated ✓" + Edit again)
+  const [wizardState, setWizardState] = useState<"summary" | "active" | "saved">("summary");
+  const [wizardStep, setWizardStep] = useState(0);
+  const [wizardDraft, setWizardDraft] = useState({
+    incomeTarget: 0,
+    spendingTarget: 0,
+    vaultGoal: 0,
+    minRunwayMonths: 0,
+  });
+  const [wizardSaving, setWizardSaving] = useState(false);
+
+  // ── JSON import (hidden file input) ──
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   if (!profile) {
     return (
@@ -150,6 +188,82 @@ export function ProfileView() {
   /* ── export CSV ── */
   function exportCsv() {
     window.location.href = "/api/export";
+  }
+
+  /* ── export JSON backup ── */
+  function exportJson() {
+    window.location.href = "/api/export-json";
+  }
+
+  /* ── import JSON backup ── */
+  async function importJson(file: File) {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error("File is not valid JSON");
+      }
+      if (!parsed || typeof parsed !== "object") {
+        throw new Error("Invalid backup file");
+      }
+      const res = await fetch("/api/import-json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || "Import failed");
+      }
+      await load();
+      toast({ title: "Data imported successfully" });
+    } catch (e: any) {
+      toast({ title: "Import failed", description: e?.message });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (f) importJson(f);
+    // Reset so picking the same file again still fires a change event
+    e.target.value = "";
+  }
+
+  /* ── wizard open ── */
+  function openWizard() {
+    setWizardDraft({
+      incomeTarget:    profile!.incomeTarget,
+      spendingTarget:  profile!.spendingTarget,
+      vaultGoal:       profile!.vaultGoal,
+      minRunwayMonths: profile!.minRunwayMonths,
+    });
+    setWizardStep(0);
+    setWizardState("active");
+  }
+
+  /* ── wizard save (patches all 4 goals at once) ── */
+  async function saveWizard() {
+    setWizardSaving(true);
+    try {
+      const res = await fetch("/api/state", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(wizardDraft),
+      });
+      if (!res.ok) throw new Error("Failed to save goals");
+      await load();
+      setWizardState("saved");
+      toast({ title: "Goals saved" });
+    } catch (e: any) {
+      toast({ title: "Couldn't save goals", description: e?.message });
+    } finally {
+      setWizardSaving(false);
+    }
   }
 
   /* ── reset app ── */
@@ -417,6 +531,273 @@ export function ProfileView() {
           <button className="btn btn-secondary btn-sm" onClick={startEditProfile}>
             Edit profile
           </button>
+        )}
+      </div>
+
+      {/* ── Quick setup wizard card ────────────────────────────────── */}
+      <div className="card mb2">
+        <div className="card-h" style={{ marginBottom: 14 }}>
+          <div>
+            <div className="card-t">Quick setup wizard</div>
+            <div className="card-s">Set your financial targets in 4 steps</div>
+          </div>
+          {wizardState !== "active" && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={openWizard}
+            >
+              {wizardState === "saved" ? "Edit again" : "Adjust"}
+            </button>
+          )}
+        </div>
+
+        {/* Collapsed summary / saved states */}
+        {wizardState !== "active" && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 11,
+              padding: "4px 0",
+            }}
+          >
+            <span
+              style={{
+                color: wizardState === "saved" ? "var(--grn)" : "var(--acc)",
+                display: "inline-flex",
+                flexShrink: 0,
+              }}
+            >
+              <Icon name={wizardState === "saved" ? "check" : "target"} size={18} />
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  color: "var(--t1)",
+                  letterSpacing: "-.01em",
+                }}
+              >
+                {wizardState === "saved" ? "Goals updated ✓" : "Your goals are set"}
+              </div>
+              <div
+                style={{
+                  fontSize: 11.5,
+                  color: "var(--t3)",
+                  marginTop: 3,
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span>
+                  Income{" "}
+                  <span className="flux-mono" style={{ color: "var(--t2)" }}>
+                    {formatINR(profile.incomeTarget, { compact: true })}
+                  </span>
+                </span>
+                <span>
+                  Spending{" "}
+                  <span className="flux-mono" style={{ color: "var(--t2)" }}>
+                    {formatINR(profile.spendingTarget, { compact: true })}
+                  </span>
+                </span>
+                <span>
+                  Vault{" "}
+                  <span className="flux-mono" style={{ color: "var(--t2)" }}>
+                    {formatINR(profile.vaultGoal, { compact: true })}
+                  </span>
+                </span>
+                <span>
+                  Runway{" "}
+                  <span className="flux-mono" style={{ color: "var(--t2)" }}>
+                    {profile.minRunwayMonths.toFixed(1)} mo
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Active wizard — 4 steps with slide transitions */}
+        {wizardState === "active" && (
+          <div>
+            {/* Progress indicator */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 16,
+              }}
+            >
+              <div className="label-sm">
+                Step {wizardStep + 1} of 4
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: i <= wizardStep ? "var(--acc)" : "var(--bg3)",
+                      transition: "background .15s ease",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Step body with horizontal slide */}
+            <div style={{ minHeight: 132, position: "relative" }}>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={wizardStep}
+                  initial={{ opacity: 0, x: 28 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -28 }}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                >
+                  {(() => {
+                    const step = WIZARD_STEPS[wizardStep];
+                    const value = wizardDraft[step.key];
+                    return (
+                      <>
+                        <div
+                          style={{
+                            fontSize: 17,
+                            fontWeight: 600,
+                            color: "var(--t1)",
+                            letterSpacing: "-.02em",
+                            marginBottom: 5,
+                          }}
+                        >
+                          {step.question}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11.5,
+                            color: "var(--t3)",
+                            marginBottom: 13,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {step.hint}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            background: "var(--bg2)",
+                            border: "1px solid var(--bdr)",
+                            borderRadius: 10,
+                            padding: "11px 14px",
+                            transition: "border-color .15s ease",
+                          }}
+                        >
+                          {step.prefix && (
+                            <span
+                              className="flux-mono"
+                              style={{
+                                fontSize: 17,
+                                fontWeight: 700,
+                                color: "var(--t3)",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {step.prefix}
+                            </span>
+                          )}
+                          <input
+                            type="number"
+                            className="flux-mono"
+                            value={value}
+                            onChange={(e) => {
+                              const v = step.parse(e.target.value);
+                              setWizardDraft({
+                                ...wizardDraft,
+                                [step.key]: isNaN(v) ? 0 : Math.max(0, v),
+                              });
+                            }}
+                            step={step.step}
+                            min={0}
+                            autoFocus
+                            style={{
+                              flex: 1,
+                              background: "transparent",
+                              border: "none",
+                              outline: "none",
+                              fontSize: 19,
+                              fontWeight: 700,
+                              color: "var(--t1)",
+                              minWidth: 0,
+                              letterSpacing: "-.01em",
+                            }}
+                          />
+                          {step.suffix && (
+                            <span
+                              style={{
+                                fontSize: 13,
+                                color: "var(--t3)",
+                                fontWeight: 600,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {step.suffix}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Nav buttons */}
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginTop: 18,
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() =>
+                  wizardStep === 0
+                    ? setWizardState("summary")
+                    : setWizardStep(wizardStep - 1)
+                }
+                disabled={wizardSaving}
+              >
+                {wizardStep === 0 ? "Cancel" : "← Prev"}
+              </button>
+              {wizardStep < WIZARD_STEPS.length - 1 ? (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setWizardStep(wizardStep + 1)}
+                >
+                  Next →
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={saveWizard}
+                  disabled={wizardSaving}
+                >
+                  {wizardSaving ? "Saving…" : "Save goals"}
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
@@ -768,6 +1149,47 @@ export function ProfileView() {
                 <div><div className="sr-name">Export all data</div></div>
               </div>
               <button className="btn btn-secondary btn-sm" onClick={exportCsv}>Export CSV</button>
+            </div>
+
+            <div className="sr">
+              <div className="sr-info">
+                <div className="sr-icon"><Icon name="download" size={15} /></div>
+                <div>
+                  <div className="sr-name">Export as JSON backup</div>
+                  <div className="sr-desc">Full backup including forecast runs &amp; chat</div>
+                </div>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={exportJson}
+                title="Full backup including forecast runs & chat"
+              >
+                Export JSON
+              </button>
+            </div>
+
+            <div className="sr">
+              <div className="sr-info">
+                <div className="sr-icon"><Icon name="refresh" size={15} /></div>
+                <div>
+                  <div className="sr-name">Import data</div>
+                  <div className="sr-desc">Restore from a JSON backup file</div>
+                </div>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => importInputRef.current?.click()}
+                disabled={importing}
+              >
+                {importing ? "Importing…" : "Import JSON"}
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json"
+                onChange={onImportFile}
+                style={{ display: "none" }}
+              />
             </div>
 
             <div className="sr">

@@ -52,6 +52,21 @@ export function Topbar() {
           </div>
         )}
 
+        {/* Command palette trigger */}
+        <button
+          className="hidden md:flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+          style={{ background: "var(--surf2)", border: "1px solid var(--bdr)", cursor: "pointer", color: "var(--t3)", fontSize: 12, transition: "border-color .15s" }}
+          onClick={() => window.dispatchEvent(new CustomEvent("flux:open-command-palette"))}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--bdr2)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--bdr)"; }}
+          title="Command palette (⌘K)"
+          type="button"
+        >
+          <Icon name="search" size={13} />
+          <span style={{ fontSize: 11.5 }}>Search…</span>
+          <kbd style={{ background: "var(--bg3)", borderRadius: 4, padding: "1px 5px", fontSize: 9.5, fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--t3)", marginLeft: 4 }}>⌘K</kbd>
+        </button>
+
         <NotificationsDropdown />
 
         <button

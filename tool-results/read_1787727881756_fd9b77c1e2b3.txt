@@ -1,0 +1,857 @@
+     1→"use client";
+     2→
+     3→import { useState } from "react";
+     4→import { useFlux, formatINR, runwayMonths, type FluxProfile } from "@/store/flux-store";
+     5→import { Icon } from "@/components/flux/icon";
+     6→import { useFluxTheme, type FluxTheme, type FluxLang } from "@/components/flux/theme-provider";
+     7→import { useToast } from "@/hooks/use-toast";
+     8→
+     9→/* ───────────────────────── helpers ───────────────────────── */
+    10→
+    11→/** "Arjun Kumar" → "AK" */
+    12→function initials(name: string): string {
+    13→  if (!name) return "FX";
+    14→  const parts = name.trim().split(/\s+/);
+    15→  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    16→  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    17→}
+    18→
+    19→/** Months-on-Flux label. The seed profile has no createdAt, so we use a
+    20→ *  deterministic, design-faithful "6 months" value (matches original demo). */
+    21→const MONTHS_ON_FLUX = 6;
+    22→
+    23→type GoalKey =
+    24→  | "incomeTarget"
+    25→  | "spendingTarget"
+    26→  | "vaultGoal"
+    27→  | "minRunwayMonths";
+    28→
+    29→const GOAL_META: Record<
+    30→  GoalKey,
+    31→  { icon: string; name: string; desc: string; suffix?: string; step?: number; min?: number }
+    32→> = {
+    33→  incomeTarget:     { icon: "target", name: "Monthly income target",   desc: "Your earning goal per month",    step: 500,  min: 0 },
+    34→  spendingTarget:   { icon: "gauge",  name: "Monthly expense ceiling", desc: "Maximum you aim to spend",       step: 500,  min: 0 },
+    35→  vaultGoal:        { icon: "vault",  name: "Safety Vault target",     desc: "Emergency fund goal",            step: 1000, min: 0 },
+    36→  minRunwayMonths:  { icon: "shield", name: "Minimum runway",          desc: "Alert threshold in months",      suffix: " mo", step: 0.5, min: 0 },
+    37→};
+    38→
+    39→function formatGoal(key: GoalKey, p: FluxProfile): string {
+    40→  if (key === "minRunwayMonths") {
+    41→    return `${p.minRunwayMonths.toFixed(1)} mo`;
+    42→  }
+    43→  return formatINR(p[key] as number);
+    44→}
+    45→
+    46→/* ───────────────────────── main view ───────────────────────── */
+    47→
+    48→export function ProfileView() {
+    49→  const profile = useFlux((s) => s.profile);
+    50→  const snapshot = useFlux((s) => s.snapshot);
+    51→  const load = useFlux((s) => s.load);
+    52→  const { theme, lang, setTheme, setLang } = useFluxTheme();
+    53→  const { toast } = useToast();
+    54→
+    55→  // profile header inline edit
+    56→  const [editingProfile, setEditingProfile] = useState(false);
+    57→  const [profileDraft, setProfileDraft] = useState({ name: "", email: "", city: "", role: "" });
+    58→  const [savingProfile, setSavingProfile] = useState(false);
+    59→
+    60→  // goal inline edit
+    61→  const [editingGoal, setEditingGoal] = useState<GoalKey | null>(null);
+    62→  const [goalDraft, setGoalDraft] = useState("");
+    63→  const [savingGoal, setSavingGoal] = useState(false);
+    64→
+    65→  // notification toggles (visual-only local state)
+    66→  const [notif, setNotif] = useState<Record<string, boolean>>({
+    67→    daily: true,
+    68→    spending: true,
+    69→    peakDay: true,
+    70→    weekly: false,
+    71→    breakRemind: true,
+    72→  });
+    73→
+    74→  // security toggles
+    75→  const [security, setSecurity] = useState<Record<string, boolean>>({
+    76→    biometric: true,
+    77→    twoFactor: true,
+    78→  });
+    79→
+    80→  const [busy, setBusy] = useState(false); // for export/reset/delete
+    81→
+    82→  if (!profile) {
+    83→    return (
+    84→      <div className="card" style={{ textAlign: "center", padding: 40 }}>
+    85→        <div style={{ fontSize: 13, color: "var(--t3)" }}>No profile loaded.</div>
+    86→      </div>
+    87→    );
+    88→  }
+    89→
+    90→  /* ── profile header save ── */
+    91→  function startEditProfile() {
+    92→    setProfileDraft({
+    93→      name: profile!.name,
+    94→      email: profile!.email,
+    95→      city: profile!.city,
+    96→      role: profile!.role,
+    97→    });
+    98→    setEditingProfile(true);
+    99→  }
+   100→
+   101→  async function saveProfile() {
+   102→    setSavingProfile(true);
+   103→    try {
+   104→      const res = await fetch("/api/state", {
+   105→        method: "PATCH",
+   106→        headers: { "Content-Type": "application/json" },
+   107→        body: JSON.stringify(profileDraft),
+   108→      });
+   109→      if (!res.ok) throw new Error("Failed to save profile");
+   110→      await load();
+   111→      setEditingProfile(false);
+   112→      toast({ title: "Profile updated" });
+   113→    } catch (e: any) {
+   114→      toast({ title: "Couldn't save profile", description: e?.message });
+   115→    } finally {
+   116→      setSavingProfile(false);
+   117→    }
+   118→  }
+   119→
+   120→  /* ── goal save ── */
+   121→  function startEditGoal(key: GoalKey) {
+   122→    setGoalDraft(String(profile![key]));
+   123→    setEditingGoal(key);
+   124→  }
+   125→
+   126→  async function saveGoal(key: GoalKey) {
+   127→    const num = key === "minRunwayMonths" ? parseFloat(goalDraft) : parseInt(goalDraft, 10);
+   128→    if (isNaN(num) || num < 0) {
+   129→      toast({ title: "Enter a valid number" });
+   130→      return;
+   131→    }
+   132→    setSavingGoal(true);
+   133→    try {
+   134→      const res = await fetch("/api/state", {
+   135→        method: "PATCH",
+   136→        headers: { "Content-Type": "application/json" },
+   137→        body: JSON.stringify({ [key]: num }),
+   138→      });
+   139→      if (!res.ok) throw new Error("Failed to save goal");
+   140→      await load();
+   141→      setEditingGoal(null);
+   142→      toast({ title: "Goal updated" });
+   143→    } catch (e: any) {
+   144→      toast({ title: "Couldn't save goal", description: e?.message });
+   145→    } finally {
+   146→      setSavingGoal(false);
+   147→    }
+   148→  }
+   149→
+   150→  /* ── export CSV ── */
+   151→  function exportCsv() {
+   152→    window.location.href = "/api/export";
+   153→  }
+   154→
+   155→  /* ── reset app ── */
+   156→  async function resetApp() {
+   157→    if (!confirm("Reset all Flux data to the demo snapshot? This cannot be undone.")) return;
+   158→    setBusy(true);
+   159→    try {
+   160→      const res = await fetch("/api/reset", { method: "POST" });
+   161→      if (!res.ok) throw new Error("Reset failed");
+   162→      await load();
+   163→      toast({ title: "Flux reset to demo data" });
+   164→    } catch (e: any) {
+   165→      toast({ title: "Reset failed", description: e?.message });
+   166→    } finally {
+   167→      setBusy(false);
+   168→    }
+   169→  }
+   170→
+   171→  /* ── delete account (also wipes data per task spec) ── */
+   172→  async function deleteAccount() {
+   173→    if (!confirm("Delete account and wipe all local Flux data? This cannot be undone.")) return;
+   174→    setBusy(true);
+   175→    try {
+   176→      const res = await fetch("/api/reset", { method: "POST" });
+   177→      if (!res.ok) throw new Error("Delete failed");
+   178→      await load();
+   179→      toast({ title: "Account data deleted" });
+   180→    } catch (e: any) {
+   181→      toast({ title: "Delete failed", description: e?.message });
+   182→    } finally {
+   183→      setBusy(false);
+   184→    }
+   185→  }
+   186→
+   187→  /* ── sign out (visual-only) ── */
+   188→  function signOut() {
+   189→    toast({ title: "Signed out (demo)", description: "Reload to come back to Flux." });
+   190→  }
+   191→
+   192→  /* ───────────────────────── render ───────────────────────── */
+   193→
+   194→  const THEMES: { key: FluxTheme; label: string; desc: string }[] = [
+   195→    { key: "dark",  label: "Dark",  desc: "Graphite" },
+   196→    { key: "light", label: "Light", desc: "Airy" },
+   197→    { key: "paper", label: "Paper", desc: "Ledger" },
+   198→  ];
+   199→
+   200→  const NOTIF_ROWS: { key: string; icon: string; name: string; desc: string }[] = [
+   201→    { key: "daily",      icon: "bell",     name: "Daily summary",            desc: "Morning overview of your finances" },
+   202→    { key: "spending",   icon: "gauge",    name: "Spending alerts",          desc: "When you approach your expense limit" },
+   203→    { key: "peakDay",    icon: "forecast", name: "High-income day alerts",   desc: "24 hours before predicted peaks" },
+   204→    { key: "weekly",     icon: "calendar", name: "Weekly digest",            desc: "Sunday summary" },
+   205→    { key: "breakRemind",icon: "calendar", name: "Break reminders",          desc: "Suggest rest on low-income windows" },
+   206→  ];
+   207→
+   208→  const ACHIEVEMENTS: {
+   209→    icon: string; name: string; desc: string; bg: string; earned: boolean;
+   210→  }[] = [
+   211→    { icon: "plus",     name: "First Step",     desc: "Made first vault deposit",     bg: "var(--grnd)", earned: true },
+   212→    { icon: "forecast", name: "Streak Master",  desc: "30 consecutive income days",   bg: "var(--accd)", earned: true },
+   213→    { icon: "calendar", name: "Smart Break",    desc: "Break Planner used 3+ times",  bg: "var(--ambd)", earned: true },
+   214→    { icon: "vault",    name: "Vault Master",   desc: "Save ₹50,000 total",           bg: "var(--bg3)",  earned: false },
+   215→    { icon: "gauge",    name: "Zero Overspend", desc: "3 months under expense ceiling", bg: "var(--bg3)", earned: false },
+   216→  ];
+   217→
+   218→  const earnedCount = ACHIEVEMENTS.filter((a) => a.earned).length;
+   219→
+   220→  /* ── goals-progress analytics (computed from live snapshot vs targets) ── */
+   221→  type GoalRow = {
+   222→    key: string;
+   223→    icon: string;
+   224→    name: string;
+   225→    currentLabel: string;
+   226→    targetLabel: string;
+   227→    pct: number;          // actual pct, may exceed 100 (e.g. runway)
+   228→    pfClass: string;      // .pf-* design-system class for the bar fill
+   229→    onTrack: boolean;
+   230→  };
+   231→
+   232→  const goalRows: GoalRow[] = snapshot
+   233→    ? (() => {
+   234→        const runwayNow = runwayMonths(
+   235→          snapshot.income,
+   236→          snapshot.spending,
+   237→          snapshot.vaultBalance,
+   238→        );
+   239→        const spendPct =
+   240→          profile!.spendingTarget > 0
+   241→            ? (snapshot.spending / profile!.spendingTarget) * 100
+   242→            : 0;
+   243→        // spending approaching target is bad → green / amber / red
+   244→        const spendPfClass =
+   245→          spendPct < 50 ? "pf-grn" : spendPct <= 80 ? "pf-amb" : "pf-red";
+   246→        return [
+   247→          {
+   248→            key: "income",
+   249→            icon: "target",
+   250→            name: "Income",
+   251→            currentLabel: formatINR(snapshot.income, { compact: true }),
+   252→            targetLabel: formatINR(profile!.incomeTarget, { compact: true }),
+   253→            pct:
+   254→              profile!.incomeTarget > 0
+   255→                ? (snapshot.income / profile!.incomeTarget) * 100
+   256→                : 0,
+   257→            pfClass: "pf-acc",
+   258→            onTrack: snapshot.income >= profile!.incomeTarget,
+   259→          },
+   260→          {
+   261→            key: "spending",
+   262→            icon: "gauge",
+   263→            name: "Spending",
+   264→            currentLabel: formatINR(snapshot.spending, { compact: true }),
+   265→            targetLabel: formatINR(profile!.spendingTarget, { compact: true }),
+   266→            pct: spendPct,
+   267→            pfClass: spendPfClass,
+   268→            onTrack: snapshot.spending <= profile!.spendingTarget,
+   269→          },
+   270→          {
+   271→            key: "vault",
+   272→            icon: "vault",
+   273→            name: "Vault",
+   274→            currentLabel: formatINR(snapshot.vaultBalance, { compact: true }),
+   275→            targetLabel: formatINR(profile!.vaultGoal, { compact: true }),
+   276→            pct:
+   277→              profile!.vaultGoal > 0
+   278→                ? (snapshot.vaultBalance / profile!.vaultGoal) * 100
+   279→                : 0,
+   280→            pfClass: "pf-teal",
+   281→            onTrack: snapshot.vaultBalance >= profile!.vaultGoal,
+   282→          },
+   283→          {
+   284→            key: "runway",
+   285→            icon: "shield",
+   286→            name: "Runway",
+   287→            currentLabel: `${runwayNow.toFixed(1)} mo`,
+   288→            targetLabel: `${profile!.minRunwayMonths.toFixed(1)} mo`,
+   289→            pct:
+   290→              profile!.minRunwayMonths > 0
+   291→                ? (runwayNow / profile!.minRunwayMonths) * 100
+   292→                : 0,
+   293→            pfClass: "pf-grn",
+   294→            onTrack: runwayNow >= profile!.minRunwayMonths,
+   295→          },
+   296→        ];
+   297→      })()
+   298→    : [];
+   299→
+   300→  const onTrackCount = goalRows.filter((g) => g.onTrack).length;
+   301→  const summaryColor =
+   302→    onTrackCount >= 3 ? "var(--grn)" : onTrackCount === 2 ? "var(--amb)" : "var(--red)";
+   303→
+   304→  return (
+   305→    <>
+   306→      {/* ── Profile header card ───────────────────────────────────── */}
+   307→      <div className="card mb2" style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
+   308→        <div
+   309→          style={{
+   310→            width: 60, height: 60, borderRadius: "50%", background: "var(--acc)",
+   311→            display: "flex", alignItems: "center", justifyContent: "center",
+   312→            fontSize: 22, fontWeight: 700, color: "#fff", flexShrink: 0,
+   313→          }}
+   314→        >
+   315→          {initials(profile.name)}
+   316→        </div>
+   317→
+   318→        <div style={{ flex: 1, minWidth: 200 }}>
+   319→          {editingProfile ? (
+   320→            <div className="stack" style={{ gap: 8 }}>
+   321→              <input
+   322→                className="flux-input"
+   323→                value={profileDraft.name}
+   324→                onChange={(e) => setProfileDraft({ ...profileDraft, name: e.target.value })}
+   325→                placeholder="Name"
+   326→                style={inputStyle}
+   327→              />
+   328→              <input
+   329→                className="flux-input"
+   330→                value={profileDraft.email}
+   331→                onChange={(e) => setProfileDraft({ ...profileDraft, email: e.target.value })}
+   332→                placeholder="Email"
+   333→                style={inputStyle}
+   334→              />
+   335→              <input
+   336→                className="flux-input"
+   337→                value={profileDraft.city}
+   338→                onChange={(e) => setProfileDraft({ ...profileDraft, city: e.target.value })}
+   339→                placeholder="City"
+   340→                style={inputStyle}
+   341→              />
+   342→              <input
+   343→                className="flux-input"
+   344→                value={profileDraft.role}
+   345→                onChange={(e) => setProfileDraft({ ...profileDraft, role: e.target.value })}
+   346→                placeholder="Role"
+   347→                style={inputStyle}
+   348→              />
+   349→              <div style={{ display: "flex", gap: 8 }}>
+   350→                <button
+   351→                  className="btn btn-primary btn-sm"
+   352→                  onClick={saveProfile}
+   353→                  disabled={savingProfile}
+   354→                >
+   355→                  {savingProfile ? "Saving…" : "Save"}
+   356→                </button>
+   357→                <button
+   358→                  className="btn btn-ghost btn-sm"
+   359→                  onClick={() => setEditingProfile(false)}
+   360→                  disabled={savingProfile}
+   361→                >
+   362→                  Cancel
+   363→                </button>
+   364→              </div>
+   365→            </div>
+   366→          ) : (
+   367→            <>
+   368→              <div
+   369→                style={{
+   370→                  fontSize: 20, fontWeight: 700, color: "var(--t1)",
+   371→                  letterSpacing: "-.03em", marginBottom: 3,
+   372→                }}
+   373→              >
+   374→                {profile.name}
+   375→              </div>
+   376→              <div style={{ fontSize: 12.5, color: "var(--t3)", marginBottom: 11 }}>
+   377→                {profile.email} · {profile.city} · {MONTHS_ON_FLUX} months on Flux
+   378→              </div>
+   379→              <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+   380→                <span className="badge bl">{profile.role}</span>
+   381→                <span className="badge bg">Complete</span>
+   382→                <span className="badge bk">Irregular income</span>
+   383→              </div>
+   384→            </>
+   385→          )}
+   386→        </div>
+   387→
+   388→        <div style={{ textAlign: "right", flexShrink: 0, display: "flex", alignItems: "center", gap: 18 }}>
+   389→          <div style={{ position: "relative", width: 76, height: 76, flexShrink: 0 }}>
+   390→            <svg width={76} height={76} style={{ transform: "rotate(-90deg)" }}>
+   391→              <circle cx={38} cy={38} r={32} fill="none" stroke="var(--bg3)" strokeWidth={6} />
+   392→              <circle
+   393→                cx={38} cy={38} r={32} fill="none"
+   394→                stroke={profile.stabilityScore >= 70 ? "var(--grn)" : profile.stabilityScore >= 50 ? "var(--amb)" : "var(--red)"}
+   395→                strokeWidth={6}
+   396→                strokeDasharray={2 * Math.PI * 32}
+   397→                strokeDashoffset={2 * Math.PI * 32 * (1 - profile.stabilityScore / 100)}
+   398→                strokeLinecap="round"
+   399→                style={{ transition: "stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1), stroke .4s" }}
+   400→              />
+   401→            </svg>
+   402→            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+   403→              <div className="flux-mono" style={{ fontSize: 20, fontWeight: 700, color: "var(--t1)", lineHeight: 1 }}>{profile.stabilityScore}</div>
+   404→              <div style={{ fontSize: 7.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 700, marginTop: 2 }}>/ 100</div>
+   405→            </div>
+   406→          </div>
+   407→          <div>
+   408→            <div className="label-sm" style={{ marginBottom: 4 }}>Stability score</div>
+   409→            <div style={{ fontSize: 12.5, fontWeight: 600, color: profile.stabilityScore >= 70 ? "var(--grn)" : profile.stabilityScore >= 50 ? "var(--amb)" : "var(--red)" }}>
+   410→              {profile.stabilityScore >= 70 ? "Good standing" : profile.stabilityScore >= 50 ? "Fair standing" : "Needs attention"}
+   411→            </div>
+   412→            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2 }}>Updated live</div>
+   413→          </div>
+   414→        </div>
+   415→
+   416→        {!editingProfile && (
+   417→          <button className="btn btn-secondary btn-sm" onClick={startEditProfile}>
+   418→            Edit profile
+   419→          </button>
+   420→        )}
+   421→      </div>
+   422→
+   423→      {/* ── Goals progress analytics card ─────────────────────────── */}
+   424→      {snapshot && (
+   425→        <div className="card mb2">
+   426→          <div className="card-h" style={{ marginBottom: 14 }}>
+   427→            <div>
+   428→              <div className="card-t">Goals progress</div>
+   429→              <div className="card-s">How close you are to each financial target</div>
+   430→            </div>
+   431→            <span className="badge bl">
+   432→              {onTrackCount} / 4 on track
+   433→            </span>
+   434→          </div>
+   435→
+   436→          <div className="g2">
+   437→            {goalRows.map((g) => {
+   438→              const barPct = Math.min(100, g.pct);          // visual cap
+   439→              const pctText = `${Math.round(g.pct)}%`;      // actual number shown
+   440→              return (
+   441→                <div
+   442→                  key={g.key}
+   443→                  style={{
+   444→                    padding: 12,
+   445→                    background: "var(--surf2)",
+   446→                    borderRadius: 10,
+   447→                    border: "1px solid var(--bdr)",
+   448→                  }}
+   449→                >
+   450→                  <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 9 }}>
+   451→                    <div
+   452→                      className="sr-icon"
+   453→                      style={{ width: 26, height: 26 }}
+   454→                    >
+   455→                      <Icon name={g.icon} size={13} />
+   456→                    </div>
+   457→                    <div style={{ flex: 1, minWidth: 0 }}>
+   458→                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t1)" }}>
+   459→                        {g.name}
+   460→                      </div>
+   461→                      <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1 }}>
+   462→                        <span className="flux-mono">{g.currentLabel}</span>
+   463→                        <span style={{ opacity: 0.6 }}> / </span>
+   464→                        <span className="flux-mono">{g.targetLabel}</span>
+   465→                      </div>
+   466→                    </div>
+   467→                    <div
+   468→                      className="flux-mono"
+   469→                      style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}
+   470→                    >
+   471→                      {pctText}
+   472→                    </div>
+   473→                  </div>
+   474→                  <div className="prog">
+   475→                    <div
+   476→                      className={`pf ${g.pfClass}`}
+   477→                      style={{ width: `${barPct}%` }}
+   478→                    />
+   479→                  </div>
+   480→                </div>
+   481→              );
+   482→            })}
+   483→          </div>
+   484→
+   485→          <div
+   486→            style={{
+   487→              marginTop: 14,
+   488→              paddingTop: 12,
+   489→              borderTop: "1px solid var(--bdr)",
+   490→              display: "flex",
+   491→              alignItems: "center",
+   492→              gap: 9,
+   493→            }}
+   494→          >
+   495→            <span style={{ color: summaryColor, display: "inline-flex" }}>
+   496→              <Icon name="check" size={16} />
+   497→            </span>
+   498→            <div style={{ fontSize: 12.5, color: "var(--t2)" }}>
+   499→              You&apos;re on track to meet{" "}
+   500→              <span
+   501→                className="flux-mono"
+   502→                style={{ color: summaryColor, fontWeight: 700 }}
+   503→              >
+   504→                {onTrackCount}
+   505→              </span>{" "}
+   506→              of 4 goals
+   507→            </div>
+   508→          </div>
+   509→        </div>
+   510→      )}
+   511→
+   512→      {/* ── Two-column grid ──────────────────────────────────────── */}
+   513→      <div className="g2">
+   514→        {/* ── LEFT stack ── */}
+   515→        <div className="stack">
+   516→          {/* Appearance — at top so the theme switcher is always visible */}
+   517→          <div className="card">
+   518→            <div className="card-t" style={{ marginBottom: 12 }}>Appearance</div>
+   519→            <div style={{ fontSize: 11.5, color: "var(--t3)", marginBottom: 10, lineHeight: 1.55 }}>
+   520→              Choose your workspace theme.
+   521→            </div>
+   522→            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+   523→              {THEMES.map((t) => {
+   524→                const isActive = theme === t.key;
+   525→                return (
+   526→                  <button
+   527→                    key={t.key}
+   528→                    onClick={() => setTheme(t.key)}
+   529→                    aria-pressed={isActive}
+   530→                    style={{
+   531→                      flex: 1,
+   532→                      position: "relative",
+   533→                      background: "var(--surf2)",
+   534→                      border: `2px solid ${isActive ? "var(--acc)" : "var(--bdr)"}`,
+   535→                      borderRadius: 10,
+   536→                      padding: 8,
+   537→                      cursor: "pointer",
+   538→                      transition: "border-color .15s, box-shadow .15s, transform .12s",
+   539→                      boxShadow: isActive ? "0 0 0 3px var(--accd)" : "none",
+   540→                      textAlign: "left",
+   541→                    }}
+   542→                  >
+   543→                    {/* Isolated theme preview: data-theme on the wrapper makes the
+   544→                        var(--bg/surf/acc) swatches resolve to THIS theme's palette. */}
+   545→                    <div data-theme={t.key} style={{ display: "flex", gap: 4, marginBottom: 7 }}>
+   546→                      <div style={{ flex: 1, height: 22, borderRadius: 4, background: "var(--bg)" }} />
+   547→                      <div style={{ flex: 1, height: 22, borderRadius: 4, background: "var(--surf)" }} />
+   548→                      <div style={{ flex: 1, height: 22, borderRadius: 4, background: "var(--acc)" }} />
+   549→                    </div>
+   550→                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>{t.label}</div>
+   551→                    <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1, letterSpacing: ".02em" }}>{t.desc}</div>
+   552→
+   553→                    {isActive && (
+   554→                      <div
+   555→                        style={{
+   556→                          position: "absolute",
+   557→                          top: 5,
+   558→                          right: 5,
+   559→                          width: 16,
+   560→                          height: 16,
+   561→                          borderRadius: "50%",
+   562→                          background: "var(--acc)",
+   563→                          color: "#fff",
+   564→                          display: "flex",
+   565→                          alignItems: "center",
+   566→                          justifyContent: "center",
+   567→                          boxShadow: "var(--s1)",
+   568→                        }}
+   569→                      >
+   570→                        <Icon name="check" size={10} />
+   571→                      </div>
+   572→                    )}
+   573→                  </button>
+   574→                );
+   575→              })}
+   576→            </div>
+   577→
+   578→            <div className="div" />
+   579→
+   580→            <div className="sr" style={{ borderBottom: "none", padding: "4px 0 0" }}>
+   581→              <div className="sr-info">
+   582→                <div className="sr-icon"><Icon name="globe" size={15} /></div>
+   583→                <div>
+   584→                  <div className="sr-name">Language</div>
+   585→                  <div className="sr-desc">Interface translation</div>
+   586→                </div>
+   587→              </div>
+   588→              <div style={{ display: "flex", gap: 4 }}>
+   589→                {(["en", "hi"] as FluxLang[]).map((l) => (
+   590→                  <button
+   591→                    key={l}
+   592→                    className={`lang-btn${lang === l ? " active" : ""}`}
+   593→                    onClick={() => setLang(l)}
+   594→                  >
+   595→                    {l === "en" ? "EN" : "हिं"}
+   596→                  </button>
+   597→                ))}
+   598→              </div>
+   599→            </div>
+   600→          </div>
+   601→
+   602→          {/* Financial goals */}
+   603→          <div className="card">
+   604→            <div className="card-t" style={{ marginBottom: 13 }}>Financial goals</div>
+   605→
+   606→            {(Object.keys(GOAL_META) as GoalKey[]).map((key) => {
+   607→              const meta = GOAL_META[key];
+   608→              return (
+   609→                <div className="sr" key={key}>
+   610→                  <div className="sr-info">
+   611→                    <div className="sr-icon"><Icon name={meta.icon} size={15} /></div>
+   612→                    <div>
+   613→                      <div className="sr-name">{meta.name}</div>
+   614→                      <div className="sr-desc">{meta.desc}</div>
+   615→                    </div>
+   616→                  </div>
+   617→                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+   618→                    {editingGoal === key ? (
+   619→                      <>
+   620→                        <input
+   621→                          type="number"
+   622→                          className="flux-input flux-mono"
+   623→                          value={goalDraft}
+   624→                          onChange={(e) => setGoalDraft(e.target.value)}
+   625→                          step={meta.step}
+   626→                          min={meta.min}
+   627→                          style={{ ...inputStyle, width: 110, textAlign: "right" }}
+   628→                          autoFocus
+   629→                        />
+   630→                        <button
+   631→                          className="btn btn-primary btn-sm"
+   632→                          onClick={() => saveGoal(key)}
+   633→                          disabled={savingGoal}
+   634→                        >
+   635→                          {savingGoal ? "…" : "Save"}
+   636→                        </button>
+   637→                        <button
+   638→                          className="btn btn-ghost btn-sm"
+   639→                          onClick={() => setEditingGoal(null)}
+   640→                          disabled={savingGoal}
+   641→                        >
+   642→                          Cancel
+   643→                        </button>
+   644→                      </>
+   645→                    ) : (
+   646→                      <>
+   647→                        <span className="flux-mono" style={{ fontSize: 13.5, fontWeight: 600, color: "var(--t1)" }}>
+   648→                          {formatGoal(key, profile)}
+   649→                        </span>
+   650→                        <button
+   651→                          className="btn btn-secondary btn-sm"
+   652→                          onClick={() => startEditGoal(key)}
+   653→                        >
+   654→                          <Icon name="settings" size={11} /> Edit
+   655→                        </button>
+   656→                      </>
+   657→                    )}
+   658→                  </div>
+   659→                </div>
+   660→              );
+   661→            })}
+   662→          </div>
+   663→
+   664→          {/* Income profile */}
+   665→          <div className="card">
+   666→            <div className="card-t" style={{ marginBottom: 13 }}>Income profile</div>
+   667→            <div className="sr">
+   668→              <div className="sr-info">
+   669→                <div className="sr-icon"><Icon name="briefcase" size={15} /></div>
+   670→                <div>
+   671→                  <div className="sr-name">Work type</div>
+   672→                  <div className="sr-desc">Freelance setup</div>
+   673→                </div>
+   674→              </div>
+   675→              <span style={{ fontSize: 13, color: "var(--t2)" }}>{profile.workType}</span>
+   676→            </div>
+   677→            <div className="sr">
+   678→              <div className="sr-info">
+   679→                <div className="sr-icon"><Icon name="calendar" size={15} /></div>
+   680→                <div>
+   681→                  <div className="sr-name">Payment frequency</div>
+   682→                  <div className="sr-desc">Income cadence</div>
+   683→                </div>
+   684→              </div>
+   685→              <span style={{ fontSize: 13, color: "var(--t2)" }}>{profile.paymentFreq}</span>
+   686→            </div>
+   687→          </div>
+   688→        </div>
+   689→
+   690→        {/* ── RIGHT stack ── */}
+   691→        <div className="stack">
+   692→          {/* Notifications */}
+   693→          <div className="card">
+   694→            <div className="card-t" style={{ marginBottom: 12 }}>Notifications</div>
+   695→            {NOTIF_ROWS.map((row) => (
+   696→              <div className="sr" key={row.key}>
+   697→                <div className="sr-info">
+   698→                  <div className="sr-icon"><Icon name={row.icon} size={15} /></div>
+   699→                  <div>
+   700→                    <div className="sr-name">{row.name}</div>
+   701→                    <div className="sr-desc">{row.desc}</div>
+   702→                  </div>
+   703→                </div>
+   704→                <div
+   705→                  className={`toggle${notif[row.key] ? " on" : ""}`}
+   706→                  onClick={() => setNotif({ ...notif, [row.key]: !notif[row.key] })}
+   707→                  role="switch"
+   708→                  aria-checked={notif[row.key]}
+   709→                  tabIndex={0}
+   710→                  onKeyDown={(e) => {
+   711→                    if (e.key === "Enter" || e.key === " ") {
+   712→                      e.preventDefault();
+   713→                      setNotif({ ...notif, [row.key]: !notif[row.key] });
+   714→                    }
+   715→                  }}
+   716→                />
+   717→              </div>
+   718→            ))}
+   719→          </div>
+   720→
+   721→          {/* Security */}
+   722→          <div className="card">
+   723→            <div className="card-t" style={{ marginBottom: 12 }}>Security</div>
+   724→
+   725→            <div className="sr">
+   726→              <div className="sr-info">
+   727→                <div className="sr-icon"><Icon name="lock" size={15} /></div>
+   728→                <div><div className="sr-name">Biometric lock</div></div>
+   729→              </div>
+   730→              <div
+   731→                className={`toggle${security.biometric ? " on" : ""}`}
+   732→                onClick={() => setSecurity({ ...security, biometric: !security.biometric })}
+   733→                role="switch"
+   734→                aria-checked={security.biometric}
+   735→                tabIndex={0}
+   736→                onKeyDown={(e) => {
+   737→                  if (e.key === "Enter" || e.key === " ") {
+   738→                    e.preventDefault();
+   739→                    setSecurity({ ...security, biometric: !security.biometric });
+   740→                  }
+   741→                }}
+   742→              />
+   743→            </div>
+   744→
+   745→            <div className="sr">
+   746→              <div className="sr-info">
+   747→                <div className="sr-icon"><Icon name="shield" size={15} /></div>
+   748→                <div><div className="sr-name">Two-factor authentication</div></div>
+   749→              </div>
+   750→              <div
+   751→                className={`toggle${security.twoFactor ? " on" : ""}`}
+   752→                onClick={() => setSecurity({ ...security, twoFactor: !security.twoFactor })}
+   753→                role="switch"
+   754→                aria-checked={security.twoFactor}
+   755→                tabIndex={0}
+   756→                onKeyDown={(e) => {
+   757→                  if (e.key === "Enter" || e.key === " ") {
+   758→                    e.preventDefault();
+   759→                    setSecurity({ ...security, twoFactor: !security.twoFactor });
+   760→                  }
+   761→                }}
+   762→              />
+   763→            </div>
+   764→
+   765→            <div className="sr">
+   766→              <div className="sr-info">
+   767→                <div className="sr-icon"><Icon name="download" size={15} /></div>
+   768→                <div><div className="sr-name">Export all data</div></div>
+   769→              </div>
+   770→              <button className="btn btn-secondary btn-sm" onClick={exportCsv}>Export CSV</button>
+   771→            </div>
+   772→
+   773→            <div className="sr">
+   774→              <div className="sr-info">
+   775→                <div className="sr-icon"><Icon name="refresh" size={15} /></div>
+   776→                <div>
+   777→                  <div className="sr-name">Reset app stats</div>
+   778→                  <div className="sr-desc">Restore the demo numbers and charts</div>
+   779→                </div>
+   780→              </div>
+   781→              <button className="btn btn-secondary btn-sm" onClick={resetApp} disabled={busy}>Reset</button>
+   782→            </div>
+   783→
+   784→            <div className="sr">
+   785→              <div className="sr-info">
+   786→                <div className="sr-icon" style={{ color: "var(--red)" }}><Icon name="trash" size={15} /></div>
+   787→                <div>
+   788→                  <div className="sr-name" style={{ color: "var(--red)" }}>Delete account</div>
+   789→                  <div className="sr-desc">Reset local Flux data</div>
+   790→                </div>
+   791→              </div>
+   792→              <button className="btn btn-danger btn-sm" onClick={deleteAccount} disabled={busy}>Delete</button>
+   793→            </div>
+   794→          </div>
+   795→
+   796→          {/* Achievements */}
+   797→          <div className="card">
+   798→            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
+   799→              <div className="card-t">Achievements</div>
+   800→              <span className="badge bl">{earnedCount} / {ACHIEVEMENTS.length} earned</span>
+   801→            </div>
+   802→            <div className="prog" style={{ marginBottom: 14 }}>
+   803→              <div
+   804→                className="pf pf-acc"
+   805→                style={{ width: `${(earnedCount / ACHIEVEMENTS.length) * 100}%` }}
+   806→              />
+   807→            </div>
+   808→            {ACHIEVEMENTS.map((a, i) => (
+   809→              <div
+   810→                className="li"
+   811→                key={a.name}
+   812→                style={{
+   813→                  opacity: a.earned ? 1 : 0.36,
+   814→                  borderBottom: i === ACHIEVEMENTS.length - 1 ? "none" : undefined,
+   815→                }}
+   816→              >
+   817→                <div className="li-icon" style={{ background: a.bg }}>
+   818→                  <Icon name={a.icon} size={15} />
+   819→                </div>
+   820→                <div className="li-body">
+   821→                  <div className="li-name">{a.name}</div>
+   822→                  <div className="li-meta">{a.desc}</div>
+   823→                </div>
+   824→                <span className={`badge ${a.earned ? "bg" : "bk"}`}>
+   825→                  {a.earned ? "Earned" : "Locked"}
+   826→                </span>
+   827→              </div>
+   828→            ))}
+   829→          </div>
+   830→
+   831→          {/* Sign out */}
+   832→          <button
+   833→            className="btn btn-ghost btn-full"
+   834→            onClick={signOut}
+   835→            style={{ border: "1px solid var(--bdr)", color: "var(--red)" }}
+   836→          >
+   837→            Sign out
+   838→          </button>
+   839→        </div>
+   840→      </div>
+   841→    </>
+   842→  );
+   843→}
+   844→
+   845→/* ───────────────────────── styles ───────────────────────── */
+   846→
+   847→const inputStyle: React.CSSProperties = {
+   848→  background: "var(--bg2)",
+   849→  border: "1px solid var(--bdr)",
+   850→  borderRadius: 8,
+   851→  padding: "7px 10px",
+   852→  fontSize: 12.5,
+   853→  color: "var(--t1)",
+   854→  outline: "none",
+   855→  width: "100%",
+   856→};
+   857→

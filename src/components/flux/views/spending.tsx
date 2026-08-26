@@ -18,6 +18,46 @@ const TREND_LABELS = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const TREND_INCOME_BASE = [42000, 58000, 46000, 49000, 44000];
 const TREND_SPENDING_BASE = [30000, 38000, 34000, 32000, 28000];
 
+/* ── Spending intensity heatmap (12 weeks × 7 days = 84 cells) ── */
+const HEAT_WEEKS = 12;
+const HEAT_DAYS = 7;
+const HEAT_DOW_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const HEAT_MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/* Day-of-week labels in the left column (only Mon/Wed/Fri to avoid clutter). */
+const HEAT_DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", ""];
+/* Week labels under the grid: anchor at 12w ago / 8w ago / 4w ago / now, blank elsewhere. */
+const HEAT_WEEK_LABELS = [
+  "12w ago", "", "", "", "8w ago", "", "", "", "4w ago", "", "", "now",
+];
+
+interface HeatCell {
+  amount: number;
+  level: number;
+  dateLabel: string;
+}
+
+/* Map a daily-spend amount to a 0–5 intensity level (matches the .hcell-0 … .hcell-5 palette). */
+function amountToLevel(amt: number): number {
+  if (amt < 500) return 0;
+  if (amt < 1000) return 1;
+  if (amt < 1500) return 2;
+  if (amt < 2200) return 3;
+  if (amt < 3000) return 4;
+  return 5;
+}
+
+/* Seeded PRNG (mulberry32) so demo heatmap data stays stable across renders. */
+function mulberry32(seed: number): () => number {
+  let t = seed;
+  return function next(): number {
+    t += 0x6d2b79f5;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /* ── Transactions pagination ── */
 const TX_PAGE_SIZE = 10;
 
@@ -192,6 +232,63 @@ export function SpendingView() {
     const savingsRate = avgIncome > 0 ? (avgSavings / avgIncome) * 100 : 0;
     return { income, spending, avgIncome, avgSpending, avgSavings, savingsRate };
   }, [snapshot?.income, snapshot?.spending]);
+
+  /* Spending-intensity heatmap (84 daily cells laid out as 7 rows × 12 weeks).
+   * Each row = one day-of-week (Mon..Sun), each column = one week.
+   * Data is generated once per mount via a seeded PRNG so it stays stable. */
+  const heatmap = useMemo<HeatCell[]>(() => {
+    const rand = mulberry32(20250319);
+    // Anchor the start date to the Monday of the week 12 weeks ago so each row maps to the same weekday.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const jsDow = today.getDay();            // 0=Sun..6=Sat
+    const daysSinceMon = (jsDow + 6) % 7;    // 0=Mon..6=Sun
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - daysSinceMon - (HEAT_WEEKS - 1) * 7);
+
+    // Choose 3–4 spike-day indices (prefer weekdays so spikes read as work-day outliers).
+    const spikeCount = 3 + Math.floor(rand() * 2);
+    const spikeIdx = new Set<number>();
+    let guard = 0;
+    while (spikeIdx.size < spikeCount && guard++ < 50) {
+      const w = Math.floor(rand() * HEAT_WEEKS);
+      const d = Math.floor(rand() * 5); // 0..4 → Mon–Fri
+      spikeIdx.add(d * HEAT_WEEKS + w);
+    }
+
+    const cells: HeatCell[] = [];
+    for (let d = 0; d < HEAT_DAYS; d++) {
+      for (let w = 0; w < HEAT_WEEKS; w++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + w * 7 + d);
+        const isWeekend = d >= 5; // Sat / Sun
+        const base = isWeekend ? 800 : 1500;
+        const variance = isWeekend ? 400 : 800;
+        const noise = (rand() * 2 - 1) * variance;
+        let amount = Math.max(0, Math.round(base + noise));
+        if (spikeIdx.has(d * HEAT_WEEKS + w)) {
+          amount = 3000 + Math.round(rand() * 800); // 3000–3800
+        }
+        cells.push({
+          amount,
+          level: amountToLevel(amount),
+          dateLabel: `${HEAT_DOW_SHORT[d]}, ${HEAT_MONTH_SHORT[date.getMonth()]} ${date.getDate()}`,
+        });
+      }
+    }
+    return cells;
+  }, []);
+
+  const heatStats = useMemo(() => {
+    const amounts = heatmap.map((c) => c.amount);
+    const sum = amounts.reduce((s, v) => s + v, 0);
+    const avg = Math.round(sum / amounts.length);
+    const max = Math.max(...amounts);
+    const nonzero = amounts.filter((v) => v > 0);
+    const minNonZero = nonzero.length ? Math.min(...nonzero) : 0;
+    const active = heatmap.filter((c) => c.level > 0).length;
+    return { avg, max, minNonZero, active };
+  }, [heatmap]);
 
   async function submitExpense(e: React.FormEvent) {
     e.preventDefault();
@@ -533,6 +630,118 @@ export function SpendingView() {
             Averaging <strong>{formatINR(trend.avgSavings, { compact: true })}</strong> saved per month
             ({formatINR(trend.avgIncome, { compact: true })} income − {formatINR(trend.avgSpending, { compact: true })} spending).
           </div>
+        </div>
+      </div>
+
+      {/* ─── Spending intensity heatmap ─── */}
+      <div className="card mb2">
+        <div className="card-h">
+          <div>
+            <div className="card-t">Spending intensity</div>
+            <div className="card-s">Last 12 weeks · darker = higher spend</div>
+          </div>
+        </div>
+
+        {/* Heatmap area: day labels (left) + cells grid + week labels (bottom) */}
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          {/* Day-of-week labels column (Mon / Wed / Fri only) */}
+          <div
+            className="flux-heat-grid"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flexShrink: 0,
+              width: 28,
+              fontSize: 9,
+              color: "var(--t3)",
+            }}
+          >
+            {HEAT_DAY_LABELS.map((l, i) => (
+              <div
+                key={i}
+                className="flux-heat-row"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  paddingRight: 4,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {l}
+              </div>
+            ))}
+          </div>
+
+          {/* Cells grid + week labels */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* 7 rows × 12 weeks heatmap */}
+            <div
+              className="flux-heat-grid"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(12, 1fr)",
+              }}
+            >
+              {heatmap.map((c, i) => (
+                <div
+                  key={i}
+                  className={`hcell-${c.level} flux-heat-cell`}
+                  title={`${c.dateLabel}: ${formatINR(c.amount)}`}
+                  style={{ justifySelf: "center" }}
+                />
+              ))}
+            </div>
+
+            {/* Week labels along the bottom */}
+            <div
+              className="flux-heat-grid"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(12, 1fr)",
+                marginTop: 6,
+                fontSize: 9,
+                color: "var(--t3)",
+              }}
+            >
+              {HEAT_WEEK_LABELS.map((l, i) => (
+                <div key={i} style={{ textAlign: "center", whiteSpace: "nowrap" }}>{l}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Legend row: Less + 6 swatches + More */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginTop: 14,
+            fontSize: 10,
+            color: "var(--t3)",
+          }}
+        >
+          <span>Less</span>
+          {[0, 1, 2, 3, 4, 5].map((l) => (
+            <div key={l} className={`hcell-${l} flux-heat-cell`} />
+          ))}
+          <span>More</span>
+        </div>
+
+        {/* 4 stat callouts */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 10,
+            marginTop: 16,
+          }}
+        >
+          <StatTile label="Avg daily spend" value={formatINR(heatStats.avg)} color="var(--t1)" />
+          <StatTile label="Highest day"     value={formatINR(heatStats.max)}       color="var(--red)" />
+          <StatTile label="Lowest day"      value={formatINR(heatStats.minNonZero)} color="var(--grn)" />
+          <StatTile label="Active days"     value={String(heatStats.active)}        color="var(--acc)" />
         </div>
       </div>
 

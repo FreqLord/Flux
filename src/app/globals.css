@@ -282,6 +282,11 @@
   .hcell-4 { background: color-mix(in srgb, var(--acc) 78%, var(--bg3)); }
   .hcell-5 { background: var(--acc); }
 
+  /* Spending-intensity heatmap sizing (desktop: 14px cells, 3px gap; mobile: 10px / 2px) */
+  .flux-heat-cell { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .flux-heat-grid { gap: 3px; }
+  .flux-heat-row { height: 14px; line-height: 14px; }
+
   .li { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--bdr); }
   .li:last-child { border-bottom: none; }
   .li-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -411,6 +416,10 @@
   .mobile-nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 10px; color: var(--t3); font-size: 10px; font-weight: 600; cursor: pointer; border-radius: 8px; }
   .mobile-nav-item.active { color: var(--acc); }
   .chat-fab { bottom: 80px; }
+  /* Spending-intensity heatmap: shrink cells on mobile */
+  .flux-heat-cell { width: 10px; height: 10px; }
+  .flux-heat-grid { gap: 2px; }
+  .flux-heat-row { height: 10px; line-height: 10px; }
 }
 
 /* range slider */
