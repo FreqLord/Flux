@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useFlux, formatINR, type FluxProfile } from "@/store/flux-store";
+import { useFlux, formatINR, runwayMonths, type FluxProfile } from "@/store/flux-store";
 import { Icon } from "@/components/flux/icon";
 import { useFluxTheme, type FluxTheme, type FluxLang } from "@/components/flux/theme-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -47,6 +47,7 @@ function formatGoal(key: GoalKey, p: FluxProfile): string {
 
 export function ProfileView() {
   const profile = useFlux((s) => s.profile);
+  const snapshot = useFlux((s) => s.snapshot);
   const load = useFlux((s) => s.load);
   const { theme, lang, setTheme, setLang } = useFluxTheme();
   const { toast } = useToast();
@@ -190,10 +191,10 @@ export function ProfileView() {
 
   /* ───────────────────────── render ───────────────────────── */
 
-  const THEMES: { key: FluxTheme; label: string }[] = [
-    { key: "dark",  label: "Dark" },
-    { key: "light", label: "Light" },
-    { key: "paper", label: "Paper" },
+  const THEMES: { key: FluxTheme; label: string; desc: string }[] = [
+    { key: "dark",  label: "Dark",  desc: "Graphite" },
+    { key: "light", label: "Light", desc: "Airy" },
+    { key: "paper", label: "Paper", desc: "Ledger" },
   ];
 
   const NOTIF_ROWS: { key: string; icon: string; name: string; desc: string }[] = [
@@ -215,6 +216,90 @@ export function ProfileView() {
   ];
 
   const earnedCount = ACHIEVEMENTS.filter((a) => a.earned).length;
+
+  /* ── goals-progress analytics (computed from live snapshot vs targets) ── */
+  type GoalRow = {
+    key: string;
+    icon: string;
+    name: string;
+    currentLabel: string;
+    targetLabel: string;
+    pct: number;          // actual pct, may exceed 100 (e.g. runway)
+    pfClass: string;      // .pf-* design-system class for the bar fill
+    onTrack: boolean;
+  };
+
+  const goalRows: GoalRow[] = snapshot
+    ? (() => {
+        const runwayNow = runwayMonths(
+          snapshot.income,
+          snapshot.spending,
+          snapshot.vaultBalance,
+        );
+        const spendPct =
+          profile!.spendingTarget > 0
+            ? (snapshot.spending / profile!.spendingTarget) * 100
+            : 0;
+        // spending approaching target is bad → green / amber / red
+        const spendPfClass =
+          spendPct < 50 ? "pf-grn" : spendPct <= 80 ? "pf-amb" : "pf-red";
+        return [
+          {
+            key: "income",
+            icon: "target",
+            name: "Income",
+            currentLabel: formatINR(snapshot.income, { compact: true }),
+            targetLabel: formatINR(profile!.incomeTarget, { compact: true }),
+            pct:
+              profile!.incomeTarget > 0
+                ? (snapshot.income / profile!.incomeTarget) * 100
+                : 0,
+            pfClass: "pf-acc",
+            onTrack: snapshot.income >= profile!.incomeTarget,
+          },
+          {
+            key: "spending",
+            icon: "gauge",
+            name: "Spending",
+            currentLabel: formatINR(snapshot.spending, { compact: true }),
+            targetLabel: formatINR(profile!.spendingTarget, { compact: true }),
+            pct: spendPct,
+            pfClass: spendPfClass,
+            onTrack: snapshot.spending <= profile!.spendingTarget,
+          },
+          {
+            key: "vault",
+            icon: "vault",
+            name: "Vault",
+            currentLabel: formatINR(snapshot.vaultBalance, { compact: true }),
+            targetLabel: formatINR(profile!.vaultGoal, { compact: true }),
+            pct:
+              profile!.vaultGoal > 0
+                ? (snapshot.vaultBalance / profile!.vaultGoal) * 100
+                : 0,
+            pfClass: "pf-teal",
+            onTrack: snapshot.vaultBalance >= profile!.vaultGoal,
+          },
+          {
+            key: "runway",
+            icon: "shield",
+            name: "Runway",
+            currentLabel: `${runwayNow.toFixed(1)} mo`,
+            targetLabel: `${profile!.minRunwayMonths.toFixed(1)} mo`,
+            pct:
+              profile!.minRunwayMonths > 0
+                ? (runwayNow / profile!.minRunwayMonths) * 100
+                : 0,
+            pfClass: "pf-grn",
+            onTrack: runwayNow >= profile!.minRunwayMonths,
+          },
+        ];
+      })()
+    : [];
+
+  const onTrackCount = goalRows.filter((g) => g.onTrack).length;
+  const summaryColor =
+    onTrackCount >= 3 ? "var(--grn)" : onTrackCount === 2 ? "var(--amb)" : "var(--red)";
 
   return (
     <>
@@ -335,10 +420,185 @@ export function ProfileView() {
         )}
       </div>
 
+      {/* ── Goals progress analytics card ─────────────────────────── */}
+      {snapshot && (
+        <div className="card mb2">
+          <div className="card-h" style={{ marginBottom: 14 }}>
+            <div>
+              <div className="card-t">Goals progress</div>
+              <div className="card-s">How close you are to each financial target</div>
+            </div>
+            <span className="badge bl">
+              {onTrackCount} / 4 on track
+            </span>
+          </div>
+
+          <div className="g2">
+            {goalRows.map((g) => {
+              const barPct = Math.min(100, g.pct);          // visual cap
+              const pctText = `${Math.round(g.pct)}%`;      // actual number shown
+              return (
+                <div
+                  key={g.key}
+                  style={{
+                    padding: 12,
+                    background: "var(--surf2)",
+                    borderRadius: 10,
+                    border: "1px solid var(--bdr)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 9 }}>
+                    <div
+                      className="sr-icon"
+                      style={{ width: 26, height: 26 }}
+                    >
+                      <Icon name={g.icon} size={13} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t1)" }}>
+                        {g.name}
+                      </div>
+                      <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1 }}>
+                        <span className="flux-mono">{g.currentLabel}</span>
+                        <span style={{ opacity: 0.6 }}> / </span>
+                        <span className="flux-mono">{g.targetLabel}</span>
+                      </div>
+                    </div>
+                    <div
+                      className="flux-mono"
+                      style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}
+                    >
+                      {pctText}
+                    </div>
+                  </div>
+                  <div className="prog">
+                    <div
+                      className={`pf ${g.pfClass}`}
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              paddingTop: 12,
+              borderTop: "1px solid var(--bdr)",
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+            }}
+          >
+            <span style={{ color: summaryColor, display: "inline-flex" }}>
+              <Icon name="check" size={16} />
+            </span>
+            <div style={{ fontSize: 12.5, color: "var(--t2)" }}>
+              You&apos;re on track to meet{" "}
+              <span
+                className="flux-mono"
+                style={{ color: summaryColor, fontWeight: 700 }}
+              >
+                {onTrackCount}
+              </span>{" "}
+              of 4 goals
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Two-column grid ──────────────────────────────────────── */}
       <div className="g2">
         {/* ── LEFT stack ── */}
         <div className="stack">
+          {/* Appearance — at top so the theme switcher is always visible */}
+          <div className="card">
+            <div className="card-t" style={{ marginBottom: 12 }}>Appearance</div>
+            <div style={{ fontSize: 11.5, color: "var(--t3)", marginBottom: 10, lineHeight: 1.55 }}>
+              Choose your workspace theme.
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              {THEMES.map((t) => {
+                const isActive = theme === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setTheme(t.key)}
+                    aria-pressed={isActive}
+                    style={{
+                      flex: 1,
+                      position: "relative",
+                      background: "var(--surf2)",
+                      border: `2px solid ${isActive ? "var(--acc)" : "var(--bdr)"}`,
+                      borderRadius: 10,
+                      padding: 8,
+                      cursor: "pointer",
+                      transition: "border-color .15s, box-shadow .15s, transform .12s",
+                      boxShadow: isActive ? "0 0 0 3px var(--accd)" : "none",
+                      textAlign: "left",
+                    }}
+                  >
+                    {/* Isolated theme preview: data-theme on the wrapper makes the
+                        var(--bg/surf/acc) swatches resolve to THIS theme's palette. */}
+                    <div data-theme={t.key} style={{ display: "flex", gap: 4, marginBottom: 7 }}>
+                      <div style={{ flex: 1, height: 22, borderRadius: 4, background: "var(--bg)" }} />
+                      <div style={{ flex: 1, height: 22, borderRadius: 4, background: "var(--surf)" }} />
+                      <div style={{ flex: 1, height: 22, borderRadius: 4, background: "var(--acc)" }} />
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>{t.label}</div>
+                    <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1, letterSpacing: ".02em" }}>{t.desc}</div>
+
+                    {isActive && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 5,
+                          right: 5,
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          background: "var(--acc)",
+                          color: "#fff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "var(--s1)",
+                        }}
+                      >
+                        <Icon name="check" size={10} />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="div" />
+
+            <div className="sr" style={{ borderBottom: "none", padding: "4px 0 0" }}>
+              <div className="sr-info">
+                <div className="sr-icon"><Icon name="globe" size={15} /></div>
+                <div>
+                  <div className="sr-name">Language</div>
+                  <div className="sr-desc">Interface translation</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                {(["en", "hi"] as FluxLang[]).map((l) => (
+                  <button
+                    key={l}
+                    className={`lang-btn${lang === l ? " active" : ""}`}
+                    onClick={() => setLang(l)}
+                  >
+                    {l === "en" ? "EN" : "हिं"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Financial goals */}
           <div className="card">
             <div className="card-t" style={{ marginBottom: 13 }}>Financial goals</div>
@@ -423,52 +683,6 @@ export function ProfileView() {
                 </div>
               </div>
               <span style={{ fontSize: 13, color: "var(--t2)" }}>{profile.paymentFreq}</span>
-            </div>
-          </div>
-
-          {/* Appearance */}
-          <div className="card">
-            <div className="card-t" style={{ marginBottom: 12 }}>Appearance</div>
-            <div style={{ fontSize: 11.5, color: "var(--t3)", marginBottom: 10, lineHeight: 1.55 }}>
-              Choose your workspace theme.
-            </div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-              {THEMES.map((t) => (
-                <button
-                  key={t.key}
-                  className={`theme-btn${theme === t.key ? " active" : ""}`}
-                  onClick={() => setTheme(t.key)}
-                  style={{
-                    flex: 1, height: 36, borderRadius: 8,
-                    border: "1px solid var(--bdr)", fontSize: 12.5, fontWeight: 600,
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="div" />
-
-            <div className="sr" style={{ borderBottom: "none", padding: "4px 0 0" }}>
-              <div className="sr-info">
-                <div className="sr-icon"><Icon name="globe" size={15} /></div>
-                <div>
-                  <div className="sr-name">Language</div>
-                  <div className="sr-desc">Interface translation</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                {(["en", "hi"] as FluxLang[]).map((l) => (
-                  <button
-                    key={l}
-                    className={`lang-btn${lang === l ? " active" : ""}`}
-                    onClick={() => setLang(l)}
-                  >
-                    {l === "en" ? "EN" : "हिं"}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -581,9 +795,15 @@ export function ProfileView() {
 
           {/* Achievements */}
           <div className="card">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
               <div className="card-t">Achievements</div>
-              <span className="badge bl">{earnedCount} / {ACHIEVEMENTS.length}</span>
+              <span className="badge bl">{earnedCount} / {ACHIEVEMENTS.length} earned</span>
+            </div>
+            <div className="prog" style={{ marginBottom: 14 }}>
+              <div
+                className="pf pf-acc"
+                style={{ width: `${(earnedCount / ACHIEVEMENTS.length) * 100}%` }}
+              />
             </div>
             {ACHIEVEMENTS.map((a, i) => (
               <div

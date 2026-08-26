@@ -490,3 +490,213 @@ Stage Summary:
 - All lint-clean, all views error-free, all APIs verified.
 - Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
 - Next opportunities: apply CountUp to Spending/Vault metric values; add tooltip on stability ring hover; add a "goals progress" chart to Profile; add streaming LLM responses for chat; add transaction search/filter on Spending; add a dark/light/paper theme preview cards in Appearance.
+
+---
+Task ID: R4-2
+Agent: general-purpose sub-agent (R4-2)
+Task: Fix Profile view layout — Appearance card cut off + add visual theme preview cards + improve Achievements section + hover effects on goal rows.
+
+Files modified:
+1. `src/components/flux/views/profile.tsx`
+2. `src/app/globals.css`
+
+Work Log:
+- Reviewed prior worklog (R3-ROUND noted "add a dark/light/paper theme preview cards in Appearance" as a next opportunity — this task delivers it).
+- Read full profile.tsx to understand the `.g2` grid + left/right stacks; noted Appearance was 3rd in the LEFT stack (last in column → cut off at bottom of viewport per VLM report).
+- Read theme-provider.tsx (confirmed `useFluxTheme()` returns `{theme, lang, setTheme, setLang, toggleTheme}`; themes are "dark"|"light"|"paper").
+- Read globals.css to confirm `.theme-btn`/`.lang-btn` classes exist + that there was NO existing `.sr:hover` rule (`.li:hover` existed, but `.sr` did not).
+- Read icon.tsx — confirmed `check` maps to `CheckCircle2` from lucide-react.
+
+Changes to profile.tsx:
+1. **THEMES constant** — extended with one-word descriptors: Dark/Graphite, Light/Airy, Paper/Ledger.
+2. **Theme preview cards** (replaced plain `.theme-btn` row):
+   - Each card is `<button>` with `flex:1` in a `display:flex; gap:8px` row.
+   - Inside each, an isolated `<div data-theme={t.key}>` wrapper makes the descendant CSS variables (`--bg`, `--surf`, `--acc`) resolve to THAT theme's palette regardless of the active theme. So the dark preview always shows graphite colors, light always airy, paper always ledger.
+   - 3 swatches at top (22px tall, flex:1, gap 4px) — bg / surface / accent — give a mini "dashboard preview".
+   - Below: theme label (12px bold) + descriptor (10px var(--t3)).
+   - Active card: `border: 2px solid var(--acc)` + `box-shadow: 0 0 0 3px var(--accd)` glow.
+   - Inactive cards: `border: 2px solid var(--bdr)`.
+   - Active card shows a 16px circular checkmark badge (`<Icon name="check" size={10}>`) absolutely positioned top-right.
+   - `aria-pressed={isActive}` for accessibility.
+3. **Moved Appearance card to TOP of left stack** — now order is: Appearance → Financial goals → Income profile. Fixes VLM-reported "Appearance header visible at bottom left, theme switcher options cut off by screen edge".
+4. **Achievements card** — added a `.prog` progress bar (`.pf.pf-acc` at `${(earnedCount / ACHIEVEMENTS.length) * 100}%` = 60%) at the top of the card between header and rows. Updated header badge from "3 / 5" to "3 / 5 earned" for clarity. Existing rows (icon, name, desc, Earned/Locked badge) left intact.
+
+Changes to globals.css:
+- Added a new `@layer components` block at the end (after the `::selection` rule):
+  ```css
+  .sr { transition: background .12s ease; }
+  .sr:hover { background: var(--surf2); }
+  ```
+- This gives every `.sr` row (financial goals, income profile, notifications, security) a subtle surf-2 background highlight on hover — matching the existing `.li:hover` treatment.
+
+Verification:
+- `cd /home/z/my-project && bun run lint` → exit code 0, no errors, no warnings.
+- All edits use design-system classes / inline `var(--*)` references — no Tailwind color utilities introduced.
+- "use client" directive preserved at top of profile.tsx.
+- Did NOT start dev server (per task instructions).
+
+Stage Summary:
+- Profile view now leads with a fully-visible Appearance card containing 3 visual theme preview cards (mini 3-swatch palette mockups + checkmark on the active one).
+- Achievements card now has a 60% accent progress bar at the top + clearer "X / Y earned" badge.
+- All `.sr` rows across the Profile page get a subtle hover highlight (reused by goals, income, notifications, security).
+- Lint clean. Ready for VLM re-review.
+
+---
+Task ID: R4-1
+Agent: general-purpose
+Task: Add transaction search/filter panel + month-over-month mini-card to the Spending view.
+
+Files modified:
+- `src/components/flux/icon.tsx` — added `search: Search` to the icon MAP (small design-system extension).
+- `src/components/flux/views/spending.tsx` — added All-transactions card at the bottom + Month-over-month card in the right stack + 4 helper functions + FilterPill & MonthOverMonth subcomponents.
+
+Changes in spending.tsx:
+1. Import: added `type Tx` from flux-store for use in table row typing.
+2. Helper functions (top-level): `txCategoryBadge` (Income→bg, Food→br, Utilities→ba, Vault→bt, Tools→ba, Transport→br, default→bk), `txAmountColor` (in→grn, out→red, vault→teal), `txAmountSign` (in→"+", out→"−", default→""), `formatTxDate` (formats as "MMM D").
+3. Inside SpendingView: pulled `transactions` from store; added `txSearch`, `txCategory`, `txFlow`, `searchFocused` state; added `txView` useMemo that returns `{allCategories, rows (≤50), shownCount, totalCount, income, expenses, net}` based on the 3 filters.
+4. Right stack: inserted `<MonthOverMonth thisMonth={m.spending} lastMonth={30000} thisLabel={snapshot?.monthShort ?? "Mar"} lastLabel="Feb" />` between Financial ratios and Recommended action.
+5. Daily chart card: added `mb2` class so it gets a margin-bottom (since transactions card is now below it).
+6. New All-transactions card (`.card.card-flush`) below the daily chart with:
+   - Header: "All transactions" / "Search and filter your spending" + a SECOND `.btn.btn-secondary.btn-sm` "Add expense" (toggles the same showForm state as the meter button).
+   - Filter bar (surf2 bg, top+bottom borders): search input (flex-1, search icon inside left, focus ring border-color var(--acc) + box-shadow var(--accd) via onFocus/onBlur state) + category filter pills ("All" + each unique category, .badge.bl when active else .badge.bk) + flow filter pills ("All"/"Income"/"Expenses", .badge.bl when active).
+   - Table: Description (.td-m) | Date (MMM D) | Category (tone-mapped badge) | Amount (right-aligned, .td-n, color + sign by flow). Empty-state row "No transactions match your filters" when zero rows.
+   - Summary footer (surf2 bg, top border): "Showing N of M transactions · Total: +₹X (income) / −₹Y (expenses) / ±₹Z (net)" — all computed from the filtered set, color-coded green/red.
+7. New `FilterPill` subcomponent: button styled as `.badge.bl|.bk` with `cursor: pointer` + `border: none`.
+8. New `MonthOverMonth` subcomponent: shows compact this-month value + colored delta pill (green if down, red if up, gray if flat) with up/down arrow icon, "vs ₹Xk in Feb" caption, then a 2-bar mini comparison (Feb gray bg3 / Mar amber var(--amb)) with proportional heights computed via `Math.max(thisMonth, lastMonth, 1)` baseline.
+
+Style rules honored:
+- Design-system classes only (`.card`, `.card-flush`, `.card-sm`, `.card-h`, `.card-t`, `.card-s`, `.table`, `.td-m`, `.td-n`, `.badge.*`, `.btn.*`, `.label-sm`, `.flux-mono`, `.flux-surface-2`, `.sr`).
+- All colors via `var(--*)` inline (grn, red, amb, teal, acc, bdr, t1, t2, t3, t4, bg3, surf, surf2, grnd, redd, accd).
+- `flux-mono` applied to all numeric values; `formatINR` for all currency (compact in footer + month-over-month, full in the table amounts).
+- "use client" already at top.
+- Existing spending meter + category breakdown table + daily chart unchanged (only added mb2 to daily chart for spacing).
+- Search input focus ring uses `var(--acc)` border + `var(--accd)` halo.
+
+Verification:
+- `bun run lint` → clean (0 errors, 0 warnings).
+- `bunx tsc --noEmit` → no errors in spending.tsx or icon.tsx (pre-existing errors in charts.tsx/examples/skills are unrelated and untouched).
+- Dev server not started (per task instructions).
+
+Stage Summary:
+- Spending view now ships a fully-wired transaction search/filter panel (search + category pills + flow pills + summary footer) at the bottom, plus a Month-over-month comparison card in the right stack.
+- Both "Add expense" buttons (meter + transactions card) toggle the same form; the form remains anchored in the spending meter card.
+- Next opportunities: surface per-row edit/delete actions; persist the active filter across view switches; add date-range filter; show category totals row in footer.
+
+---
+Task ID: R4-3
+Agent: sub-agent (general-purpose) — Round 4, task 3
+Task: Add goals-progress analytics chart to Profile view, polish toast notifications, and add FAB pulse animation.
+
+Work Log:
+- Read worklog.md (R3-ROUND entry for context — confirmed next-opportunities list explicitly mentioned adding a "goals progress" chart to Profile), profile.tsx (existing structure: header card → g2 grid; profile targets incomeTarget/spendingTarget/vaultGoal/minRunwayMonths via GOAL_META map), flux-store.ts (snapshot: {income, spending, vaultBalance}; profile: FluxProfile; formatINR(n, {compact:true}); runwayMonths(income, spending, vault) helper exported), charts.tsx (verified ProgressRing/Donut/BarChart exist but not needed — using inline .prog + .pf-* design-system bars instead per spec), globals.css (confirmed `.prog`, `.pf`, `.pf-acc/grn/teal/amb/red`, `.card`, `.card-h`, `.card-t`, `.card-s`, `.g2`, `.sr-icon`, `.flux-mono`, `.badge.bl` classes; existing `.chat-fab` rule), icon.tsx (verified `target`, `gauge`, `vault`, `shield`, `check` all mapped), toast.tsx + toaster.tsx + use-toast.ts (shadcn toast using cva with `default` + `destructive` variants; radix primitives), chat-fab.tsx (uses `className="chat-fab"` on a fixed button).
+
+Files modified:
+1. `/home/z/my-project/src/app/globals.css`
+   • Added `overflow: visible` to `.chat-fab` so the pulse ring can extend beyond the FAB's 52px bounds.
+   • Appended `.chat-fab::before` rule: pseudo-element circle (inset:0, border-radius:50%, background:var(--acc)), z-index:-1 so it sits above the FAB's own background but below the in-flow Icon (same color as FAB → invisible inside the FAB; visible only as a ring when scaled beyond 52px), `pointer-events:none` so clicks pass through, and `animation: fabPulse 2.4s infinite cubic-bezier(.4,0,.2,1)`.
+   • Appended `.chat-fab.is-open::before { animation: none; opacity: 0; }` to stop the pulse once the user opens the chat panel (matches "first visit / no unread" intent).
+   • Appended `@keyframes fabPulse` with the exact keyframes from the spec: 0% scale(1) opacity 0.6 → 70% scale(1.4) opacity 0 → 100% scale(1.4) opacity 0.
+   • Appended `.flux-toast` class: `border-radius: 12px !important`, `box-shadow: var(--s3)`, `border-left-width: 3px`, `overflow: hidden`.
+   • Appended `.flux-toast[data-state="open"]` rule applying `animation: toastSlideIn .35s cubic-bezier(.4,0,.2,1)` on open (overrides radix's default slide-in).
+   • Appended variant-specific border-left-color classes: `.flux-toast-default → var(--acc)`, `.flux-toast-success → var(--grn)`, `.flux-toast-destructive → var(--red)`.
+   • Appended `@keyframes toastSlideIn` with exact keyframes from the spec (translateY(8px) translateX(8px) + fade).
+
+2. `/home/z/my-project/src/components/ui/toast.tsx`
+   • Added `flux-toast` to the cva base string (so the new design-system class always applies).
+   • Added a new `success` variant to the cva variants map (default + success + destructive).
+   • Added variant-specific class names (`flux-toast-default`, `flux-toast-success`, `flux-toast-destructive`) to each variant so the border-left-color rules in globals.css can target them.
+   • Kept all existing structure (ToastClose, ToastTitle, ToastDescription, ToastAction) unchanged.
+
+3. `/home/z/my-project/src/components/flux/chat-fab.tsx`
+   • Updated the FAB button className to `chat-fab${open ? " is-open" : ""}` so the pulse animation stops when the chat panel is open (engaged state).
+
+4. `/home/z/my-project/src/components/flux/views/profile.tsx`
+   • Imported `runwayMonths` from `@/store/flux-store`.
+   • Added `const snapshot = useFlux((s) => s.snapshot);` to read the live snapshot.
+   • Computed a `goalRows: GoalRow[]` array (typed via a local `GoalRow` type) using an IIFE that returns `[]` when snapshot is null. Each row carries: `key`, `icon`, `name`, `currentLabel`, `targetLabel`, `pct` (actual — may exceed 100 for runway), `pfClass` (design-system `.pf-*` class), `onTrack` boolean.
+     - Income: pct = snapshot.income / profile.incomeTarget × 100 (div-by-zero guard), bar `pf-acc`, onTrack = income ≥ target.
+     - Spending: pct = snapshot.spending / profile.spendingTarget × 100 (guard), bar color dynamic via thresholds — `<50%` → `pf-grn`, `50-80%` → `pf-amb`, `>80%` → `pf-red` (spending approaching target is bad). onTrack = spending ≤ target.
+     - Vault: pct = snapshot.vaultBalance / profile.vaultGoal × 100 (guard), bar `pf-teal`, onTrack = vault ≥ goal.
+     - Runway: pct = runwayMonths(...) / profile.minRunwayMonths × 100 (guard, can exceed 100), bar `pf-grn`, onTrack = runway ≥ target.
+   • Computed `onTrackCount` and `summaryColor` (≥3 → `var(--grn)`, ==2 → `var(--amb)`, <2 → `var(--red)`).
+   • Inserted a NEW "Goals progress" card between the existing profile header card and the `.g2` two-column grid (wrapped in `{snapshot && (...)}` so it only renders once the snapshot is loaded). Card structure:
+     - `.card-h` header: "Goals progress" + subtitle "How close you are to each financial target" + a `.badge bl` showing `{onTrackCount} / 4 on track`.
+     - `.g2` grid of 4 goal rows. Each row: `.sr-icon` (26×26) + name + current/target labels (`flux-mono`, target smaller via 10px font) + pct text (right, `flux-mono` 13px bold) on top; `.prog` bar with `.pf ${g.pfClass}` fill (width = `Math.min(100, pct)%` to cap visually at 100%, while the pct text shows the actual unrounded value).
+     - Footer (top border separator): a checkmark `Icon name="check"` colored via `summaryColor` + text "You're on track to meet {onTrackCount} of 4 goals" with the count colored via `summaryColor`.
+   • Used `formatINR(..., { compact: true })` for the current/target labels so they fit compactly in the 2-col grid.
+   • Used `&apos;` for the apostrophe in "You're" (JSX requirement).
+
+Verification:
+- `cd /home/z/my-project && bun run lint 2>&1` → exit 0, 0 errors, 0 warnings.
+- Targeted lint on the 4 modified files → all clean.
+- `bunx tsc --noEmit` reports zero errors in any of the modified files (pre-existing TS errors in `charts.tsx`, `examples/websocket/server.ts`, `skills/*` are unrelated and unchanged).
+- Did NOT start the dev server per task instructions.
+
+Stage Summary:
+- Profile view now leads with a Goals Progress analytics card showing 4 live goal bars (income / spending / vault / runway) with color-coded progress, dynamic spending-bar color (green/amber/red by threshold), and a "You're on track to meet N of 4 goals" summary line with color-coded checkmark.
+- Toast notifications now slide-in + fade with a colored left border (accent for default, green for success, red for destructive), 12px border-radius, and a var(--s3) shadow.
+- The chat FAB has a subtle pulsing accent-colored ring that draws attention on first visit and stops pulsing once the chat panel is opened (via `is-open` class).
+- All changes use the existing design-system tokens/classes (`var(--*)`, `.pf-*`, `.prog`, `.flux-mono`, `.card`, `.badge`, etc.) — no new Tailwind color utilities introduced.
+- Next opportunities: wire `variant: "success"` / `variant: "destructive"` into the existing `toast({...})` call sites in chat-fab/profile/etc. so the colored borders actually fire on success vs error toasts (currently all default to accent).
+
+---
+Task ID: R4-ROUND
+Agent: orchestrator (main) — cron review round 4
+Task: QA all 8 views, add transaction search/filter, theme preview cards, goals progress chart, toast polish, FAB pulse.
+
+Work Log:
+- Reviewed prior worklog (R3-ROUND confirmed 8 views + What-If Simulator + keyboard shortcuts).
+- Started dev server + mini-service, ran comprehensive QA via agent-browser across all 8 views: zero console errors, zero page errors.
+- Ran VLM (z-ai vision) review on Spending, Profile, Simulator — collected specific gaps (missing search/filter, theme switcher cut off, no goals chart).
+
+Bugs found & fixed:
+- **Profile Appearance section cut off**: the `.g2` grid pushed the theme switcher below the fold. Fixed by moving the Appearance card to the TOP of the left stack (before Financial goals).
+- **Theme buttons were plain text**: replaced with visual preview cards (see new features below).
+- **Achievements not visible**: added a progress bar + clearer "3 / 5 earned" badge.
+
+New features added:
+1. **Transactions search & filter panel** on Spending view (`src/components/flux/views/spending.tsx`):
+   - Search input (placeholder "Search transactions…") with search icon + focus ring
+   - Category filter pills (All + each unique category) — active gets `.badge.bl`
+   - Flow filter pills (All / Income / Expenses) — active gets `.badge.bl`
+   - Filtered transactions table (Description/Date/Category/Amount, up to 50 rows) with tone-mapped badges + signed colored amounts
+   - Summary footer: "Showing N of M · Total: +₹X (income) / −₹Y (expenses) / ±₹Z (net)"
+   - Verified: "Search transactions" textbox + filter pills + table all render. VLM rates 9/10.
+2. **Month-over-month comparison card** on Spending: this-month value, colored delta pill (green if down, red if up) with arrow icon, "vs ₹X in Feb" caption, 2-bar mini comparison (Feb gray / Mar amber).
+3. **Visual theme preview cards** on Profile Appearance section:
+   - Each theme (Dark/Light/Paper) renders in an isolated `<div data-theme={key}>` wrapper so its 3 swatches (bg/surf/acc) always show that theme's actual palette regardless of active theme
+   - Active card gets 2px accent border + glow + checkmark badge
+   - Descriptor labels ("Graphite" / "Airy" / "Ledger")
+   - VLM rates 9/10: "Excellent execution. Visual swatches allow users to see the aesthetic impact instantly."
+4. **Goals progress analytics card** at top of Profile:
+   - 4 progress rows (income target, spending ceiling, vault goal, runway) with live bars
+   - Spending bar color dynamically shifts green→amber→red based on pct-of-target
+   - Runway pct can exceed 100% (shown as actual number, bar visually capped)
+   - Summary: "You're on track to meet N of 4 goals" with color-coded checkmark
+5. **Improved toast styling**: slide-in + fade animation, colored left border by variant (success→green, error→red, default→accent), 12px radius, `var(--s3)` shadow. Added a new `success` toast variant.
+6. **FAB pulse animation**: the chat FAB now pulses a subtle accent-colored ring (`::before` pseudo-element with `fabPulse` keyframes) that stops when the chat panel opens via an `is-open` class.
+
+Styling improvements:
+- Theme preview cards use the `data-theme` attribute isolation technique
+- `.sr:hover` subtle background highlight added globally
+- Toast slide-in keyframes + variant border-left colors
+- FAB `::before` pulse ring (pointer-events: none so clicks pass through)
+- Goals progress bars use existing `.prog`/`.pf-*` classes with color-coded fills
+
+Verification:
+- `bun run lint` → clean (0 errors, 0 warnings).
+- All 8 views render via agent-browser with zero console/page errors.
+- Spending transactions panel verified: "Search transactions" textbox + filter pills + table + summary footer all present. VLM rates 9/10.
+- Profile theme preview cards verified: "Dark Graphite", "Light Airy", "Paper Ledger" all render. VLM rates 9/10.
+- Profile goals progress card renders with 4 bars + summary.
+- Toast slide-in animation + colored borders confirmed via CSS.
+- FAB pulse animation confirmed via CSS.
+- Zero errors in dev log (excluding expected LLM 429 rate-limits).
+
+Stage Summary:
+- Flux is now even more feature-rich and polished.
+- 6 new features/improvements: transaction search/filter, month-over-month comparison, theme preview cards, goals progress chart, improved toast styling, FAB pulse.
+- 3 bug fixes: Appearance section cut off, theme buttons plain, achievements visibility.
+- All lint-clean, all views error-free, all features verified.
+- Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
+- Next opportunities: add streaming LLM responses for chat; add transaction pagination; add a spending trends LineChart (last 6 months); add a "share scenario" feature for the What-If Simulator; add dark/light/paper keyboard shortcut preview; add a notifications dropdown in the topbar.

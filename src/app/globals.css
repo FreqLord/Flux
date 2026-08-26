@@ -370,8 +370,27 @@
 .topbar { height: 56px; border-bottom: 1px solid var(--bdr); background: var(--bg2); display: flex; align-items: center; justify-content: space-between; padding: 0 28px; position: sticky; top: 0; z-index: 20; }
 
 /* chat fab */
-.chat-fab { position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px; border-radius: 50%; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: var(--s3); z-index: 40; transition: transform .2s; }
+.chat-fab { position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px; border-radius: 50%; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: var(--s3); z-index: 40; transition: transform .2s; overflow: visible; }
 .chat-fab:hover { transform: scale(1.06); }
+
+/* chat-fab pulse ring — draws attention on first visit / when no unread msgs */
+.chat-fab::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--acc);
+  opacity: 0;
+  z-index: -1;
+  pointer-events: none;
+  animation: fabPulse 2.4s infinite cubic-bezier(.4,0,.2,1);
+}
+.chat-fab.is-open::before { animation: none; opacity: 0; }
+@keyframes fabPulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  70% { transform: scale(1.4); opacity: 0; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
 
 /* mobile nav */
 .mobile-nav { display: none; }
@@ -556,4 +575,28 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius
 
 /* selection */
 ::selection { background: var(--accm); color: var(--t1); }
+
+/* ─── Toast polish: slide-in + colored left border by variant ─── */
+.flux-toast {
+  border-radius: 12px !important;
+  box-shadow: var(--s3);
+  border-left-width: 3px;
+  overflow: hidden;
+}
+.flux-toast[data-state="open"] {
+  animation: toastSlideIn .35s cubic-bezier(.4,0,.2,1);
+}
+.flux-toast.flux-toast-default { border-left-color: var(--acc); }
+.flux-toast.flux-toast-success { border-left-color: var(--grn); }
+.flux-toast.flux-toast-destructive { border-left-color: var(--red); }
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateY(8px) translateX(8px); }
+  to   { opacity: 1; transform: translateY(0) translateX(0); }
+}
+
+/* ─── Profile goal/setting row hover (added R4-2) ─────────── */
+@layer components {
+  .sr { transition: background .12s ease; }
+  .sr:hover { background: var(--surf2); }
+}
 

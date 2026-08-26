@@ -247,7 +247,7 @@ export function ChatFab() {
   return (
     <>
       <button
-        className="chat-fab"
+        className={`chat-fab${open ? " is-open" : ""}`}
         onClick={() => setOpen((v) => !v)}
         title="Ask Flux AI"
         type="button"

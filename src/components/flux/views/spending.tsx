@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useFlux, formatINR, type Category } from "@/store/flux-store";
+import { useFlux, formatINR, type Category, type Tx } from "@/store/flux-store";
 import { LineChart, ProgressRing } from "@/components/flux/charts";
 import { Icon } from "@/components/flux/icon";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +35,43 @@ function statusFor(spent: number, limit: number): { cls: string; label: string }
   return { cls: "badge bg", label: "Under" };
 }
 
+/* ── Transaction helpers ── */
+function txCategoryBadge(category: string): string {
+  switch (category) {
+    case "Income":    return "badge bg";
+    case "Food":      return "badge br";
+    case "Utilities": return "badge ba";
+    case "Vault":     return "badge bt";
+    case "Tools":     return "badge ba";
+    case "Transport": return "badge br";
+    default:          return "badge bk";
+  }
+}
+
+function txAmountColor(flow: string): string {
+  switch (flow) {
+    case "in":    return "var(--grn)";
+    case "out":   return "var(--red)";
+    case "vault": return "var(--teal)";
+    default:      return "var(--t1)";
+  }
+}
+
+function txAmountSign(flow: string): string {
+  switch (flow) {
+    case "in":  return "+";
+    case "out": return "−";
+    default:    return "";
+  }
+}
+
+function formatTxDate(date: string | Date): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "—";
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[d.getMonth()]} ${d.getDate()}`;
+}
+
 export function SpendingView() {
   const snapshot = useFlux((s) => s.snapshot);
   const categories = useFlux((s) => s.categories);
@@ -46,6 +83,12 @@ export function SpendingView() {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const transactions = useFlux((s) => s.transactions);
+  const [txSearch, setTxSearch] = useState("");
+  const [txCategory, setTxCategory] = useState<string>("All");
+  const [txFlow, setTxFlow] = useState<string>("All");
+  const [searchFocused, setSearchFocused] = useState(false);
 
   /* Derived spending metrics */
   const m = useMemo(() => {
@@ -80,6 +123,40 @@ export function SpendingView() {
     () => [...categories].sort((a, b) => a.order - b.order),
     [categories]
   );
+
+  /* Filtered transactions (search + category + flow) */
+  const txView = useMemo(() => {
+    const allCategories = Array.from(
+      new Set(transactions.map((t) => t.category))
+    ).sort();
+
+    const filtered = transactions.filter((t) => {
+      const q = txSearch.trim().toLowerCase();
+      if (q && !t.label.toLowerCase().includes(q)) return false;
+      if (txCategory !== "All" && t.category !== txCategory) return false;
+      if (txFlow === "Income" && t.flow !== "in") return false;
+      if (txFlow === "Expenses" && t.flow !== "out") return false;
+      return true;
+    });
+
+    const income = filtered
+      .filter((t) => t.flow === "in")
+      .reduce((s, t) => s + t.amount, 0);
+    const expenses = filtered
+      .filter((t) => t.flow === "out")
+      .reduce((s, t) => s + t.amount, 0);
+    const net = income - expenses;
+
+    return {
+      allCategories,
+      rows: filtered.slice(0, 50),
+      shownCount: filtered.length,
+      totalCount: transactions.length,
+      income,
+      expenses,
+      net,
+    };
+  }, [transactions, txSearch, txCategory, txFlow]);
 
   async function submitExpense(e: React.FormEvent) {
     e.preventDefault();
@@ -259,6 +336,13 @@ export function SpendingView() {
             <RatioRow label="Target ratio"      value="≤60%"                                  color="var(--t3)" />
           </div>
 
+          <MonthOverMonth
+            thisMonth={m.spending}
+            lastMonth={30000}
+            thisLabel={snapshot?.monthShort ?? "Mar"}
+            lastLabel="Feb"
+          />
+
           <div className="ins ins-acc" style={{ margin: 0, padding: "12px 14px" }}>
             <div className="ins-h">Recommended action</div>
             <div className="ins-b">Review category pressure and log anything still missing.</div>
@@ -336,7 +420,7 @@ export function SpendingView() {
       </div>
 
       {/* ─── Daily spending chart ─── */}
-      <div className="card">
+      <div className="card mb2">
         <div className="card-h">
           <div>
             <div className="card-t">Daily spending</div>
@@ -368,7 +452,338 @@ export function SpendingView() {
           ]}
         />
       </div>
+
+      {/* ─── All transactions ─── */}
+      <div className="card card-flush">
+        <div style={{ padding: "18px 18px 0" }}>
+          <div className="card-h" style={{ marginBottom: 0 }}>
+            <div>
+              <div className="card-t">All transactions</div>
+              <div className="card-s">Search and filter your spending</div>
+            </div>
+            <button
+              className="btn btn-secondary btn-sm"
+              type="button"
+              onClick={() => setShowForm((v) => !v)}
+            >
+              <Icon name="plus" size={13} /> Add expense
+            </button>
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        <div
+          style={{
+            padding: "12px 18px",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            alignItems: "center",
+            borderTop: "1px solid var(--bdr)",
+            borderBottom: "1px solid var(--bdr)",
+            marginTop: 13,
+            background: "var(--surf2)",
+          }}
+        >
+          {/* Search input */}
+          <div style={{ position: "relative", flex: "1 1 220px", minWidth: 200 }}>
+            <span
+              style={{
+                position: "absolute",
+                left: 10,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--t3)",
+                pointerEvents: "none",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <Icon name="search" size={14} />
+            </span>
+            <input
+              type="text"
+              value={txSearch}
+              onChange={(e) => setTxSearch(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Search transactions…"
+              aria-label="Search transactions"
+              style={{
+                ...inputStyle,
+                width: "100%",
+                paddingLeft: 32,
+                fontFamily: "var(--font-sans)",
+                borderColor: searchFocused ? "var(--acc)" : "var(--bdr)",
+                boxShadow: searchFocused ? "0 0 0 3px var(--accd)" : "none",
+              }}
+            />
+          </div>
+
+          {/* Category filter pills */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            <FilterPill label="All" active={txCategory === "All"} onClick={() => setTxCategory("All")} />
+            {txView.allCategories.map((cat) => (
+              <FilterPill
+                key={cat}
+                label={cat}
+                active={txCategory === cat}
+                onClick={() => setTxCategory(cat)}
+              />
+            ))}
+          </div>
+
+          {/* Flow filter */}
+          <div style={{ display: "flex", gap: 5 }}>
+            {(["All", "Income", "Expenses"] as const).map((f) => (
+              <FilterPill
+                key={f}
+                label={f}
+                active={txFlow === f}
+                onClick={() => setTxFlow(f)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Table */}
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>Date</th>
+              <th>Category</th>
+              <th style={{ textAlign: "right" }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {txView.rows.map((t: Tx) => (
+              <tr key={t.id}>
+                <td className="td-m">{t.label}</td>
+                <td>{formatTxDate(t.date)}</td>
+                <td>
+                  <span className={txCategoryBadge(t.category)}>{t.category}</span>
+                </td>
+                <td
+                  className="td-n"
+                  style={{ textAlign: "right", color: txAmountColor(t.flow) }}
+                >
+                  {txAmountSign(t.flow)}{formatINR(Math.abs(t.amount))}
+                </td>
+              </tr>
+            ))}
+            {txView.rows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={4}
+                  style={{ textAlign: "center", color: "var(--t3)", padding: 28 }}
+                >
+                  No transactions match your filters
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {/* Summary footer */}
+        <div
+          className="flux-surface-2"
+          style={{
+            padding: "12px 18px",
+            borderTop: "1px solid var(--bdr)",
+            fontSize: 11.5,
+            color: "var(--t3)",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "3px 8px",
+            alignItems: "center",
+          }}
+        >
+          <span>
+            Showing{" "}
+            <span className="flux-mono" style={{ color: "var(--t1)", fontWeight: 600 }}>
+              {txView.shownCount}
+            </span>{" "}
+            of{" "}
+            <span className="flux-mono" style={{ color: "var(--t1)", fontWeight: 600 }}>
+              {txView.totalCount}
+            </span>{" "}
+            transactions
+          </span>
+          <span style={{ color: "var(--t4)" }}>·</span>
+          <span>
+            Total:{" "}
+            <span className="flux-mono" style={{ color: "var(--grn)", fontWeight: 600 }}>
+              +{formatINR(txView.income, { compact: true })}
+            </span>
+            <span style={{ margin: "0 4px" }}>(income) /</span>
+            <span className="flux-mono" style={{ color: "var(--red)", fontWeight: 600 }}>
+              −{formatINR(txView.expenses, { compact: true })}
+            </span>
+            <span style={{ margin: "0 4px" }}>(expenses) /</span>
+            <span
+              className="flux-mono"
+              style={{
+                color: txView.net >= 0 ? "var(--grn)" : "var(--red)",
+                fontWeight: 600,
+              }}
+            >
+              {txView.net >= 0 ? "+" : "−"}
+              {formatINR(Math.abs(txView.net), { compact: true })}
+            </span>
+            <span style={{ marginLeft: 4 }}>(net)</span>
+          </span>
+        </div>
+      </div>
     </>
+  );
+}
+
+/* ─── Filter pill button (used in transactions filter bar) ─── */
+function FilterPill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`badge ${active ? "bl" : "bk"}`}
+      onClick={onClick}
+      style={{ cursor: "pointer", border: "none" }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ─── Month-over-month mini comparison card ─── */
+function MonthOverMonth({
+  thisMonth,
+  lastMonth,
+  thisLabel,
+  lastLabel,
+}: {
+  thisMonth: number;
+  lastMonth: number;
+  thisLabel: string;
+  lastLabel: string;
+}) {
+  const delta = thisMonth - lastMonth;
+  const pctDelta = lastMonth > 0 ? (delta / lastMonth) * 100 : 0;
+  const isFlat = delta === 0;
+  const isDown = delta < 0;
+  const maxBar = Math.max(thisMonth, lastMonth, 1);
+  const hThis = Math.max(10, Math.round((thisMonth / maxBar) * 96));
+  const hLast = Math.max(10, Math.round((lastMonth / maxBar) * 96));
+  const deltaColor = isFlat ? "var(--t3)" : isDown ? "var(--grn)" : "var(--red)";
+  const deltaBg = isFlat ? "var(--bg3)" : isDown ? "var(--grnd)" : "var(--redd)";
+
+  return (
+    <div className="card card-sm">
+      <div className="card-t" style={{ marginBottom: 4 }}>Month-over-month</div>
+      <div className="card-s" style={{ marginBottom: 12 }}>Spending vs last month</div>
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+        <span
+          className="flux-mono"
+          style={{
+            fontSize: 22,
+            fontWeight: 600,
+            color: "var(--t1)",
+            letterSpacing: "-.02em",
+          }}
+        >
+          {formatINR(thisMonth, { compact: true })}
+        </span>
+        <span
+          className="flux-mono"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            fontSize: 11,
+            fontWeight: 700,
+            color: deltaColor,
+            background: deltaBg,
+            padding: "2px 7px",
+            borderRadius: 100,
+          }}
+        >
+          <Icon name={isFlat ? "info" : isDown ? "down" : "up"} size={11} />
+          {isFlat ? "0%" : `${Math.abs(Math.round(pctDelta))}%`}
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 14 }}>
+        vs {formatINR(lastMonth, { compact: true })} in {lastLabel}
+      </div>
+
+      {/* 2-bar mini comparison */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "end",
+          justifyContent: "center",
+          gap: 24,
+          height: 110,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 6,
+            flex: "0 0 56px",
+          }}
+        >
+          <div
+            className="flux-mono"
+            style={{ fontSize: 10.5, fontWeight: 600, color: "var(--t2)" }}
+          >
+            {formatINR(lastMonth, { compact: true })}
+          </div>
+          <div
+            style={{
+              width: "100%",
+              height: hLast,
+              background: "var(--bg3)",
+              borderRadius: "6px 6px 0 0",
+            }}
+          />
+          <div className="label-sm" style={{ marginBottom: 0 }}>{lastLabel}</div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 6,
+            flex: "0 0 56px",
+          }}
+        >
+          <div
+            className="flux-mono"
+            style={{ fontSize: 10.5, fontWeight: 600, color: "var(--amb)" }}
+          >
+            {formatINR(thisMonth, { compact: true })}
+          </div>
+          <div
+            style={{
+              width: "100%",
+              height: hThis,
+              background: "var(--amb)",
+              borderRadius: "6px 6px 0 0",
+            }}
+          />
+          <div className="label-sm" style={{ marginBottom: 0 }}>{thisLabel}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
