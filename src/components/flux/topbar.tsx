@@ -3,6 +3,7 @@
 import { useFluxTheme } from "./theme-provider";
 import { Icon } from "./icon";
 import { ShortcutsHelp } from "./shortcuts-help";
+import { NotificationsDropdown } from "./notifications-dropdown";
 import { useFlux, formatINR } from "@/store/flux-store";
 
 const TITLES: Record<string, { title: string; sub: string }> = {
@@ -50,6 +51,8 @@ export function Topbar() {
             </div>
           </div>
         )}
+
+        <NotificationsDropdown />
 
         <button
           className="theme-btn"

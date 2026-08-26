@@ -174,6 +174,7 @@ export function ChatFab() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
   const messages = useFlux((s) => s.chatMessages);
   const addMsg = useFlux((s) => s.addChatMsg);
   const setMessages = useFlux((s) => s.setChatMessages);
@@ -209,19 +210,50 @@ export function ChatFab() {
     setInput("");
     addMsg({ role: "user", content: trimmed });
     setSending(true);
+    setStreamingText("");
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed }),
       });
-      const data = await res.json();
-      if (data.content) {
-        addMsg({ role: "assistant", content: data.content });
-      } else if (data.error) {
-        addMsg({ role: "assistant", content: `Sorry — ${data.error}` });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullContent = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data.token) {
+              fullContent += data.token;
+              setStreamingText(fullContent);
+            }
+            if (data.done) {
+              fullContent = data.content || fullContent;
+              setStreamingText("");
+              addMsg({ role: "assistant", content: fullContent });
+            }
+            if (data.error) {
+              setStreamingText("");
+              addMsg({ role: "assistant", content: `Sorry — ${data.error}` });
+            }
+          } catch {
+            /* skip */
+          }
+        }
       }
     } catch {
+      setStreamingText("");
       addMsg({
         role: "assistant",
         content: "I'm having trouble connecting right now. Please try again.",
@@ -324,10 +356,18 @@ export function ChatFab() {
                     style={{
                       padding: "10px 13px", borderRadius: 12, borderBottomLeftRadius: 3,
                       background: "var(--surf2)", border: "1px solid var(--bdr)",
-                      display: "inline-flex", alignItems: "center", gap: 8,
+                      display: "inline-flex", alignItems: streamingText ? "flex-start" : "center",
+                      gap: 8, maxWidth: "85%",
                     }}
                   >
-                    <TypingDots />
+                    {streamingText ? (
+                      <div className="flux-markdown" style={{ color: "var(--t1)", fontSize: 11.5 }}>
+                        <Markdown content={streamingText} />
+                        <span style={{ display: "inline-block", width: 5, height: 11, background: "var(--acc)", borderRadius: 1, marginLeft: 1, verticalAlign: "text-bottom", animation: "fluxTyping 1s infinite" }} />
+                      </div>
+                    ) : (
+                      <TypingDots />
+                    )}
                   </div>
                 </div>
               )}

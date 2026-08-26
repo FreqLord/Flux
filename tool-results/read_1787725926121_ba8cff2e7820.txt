@@ -1,0 +1,838 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useMemo, useState } from "react";
+     4→     4→import { useFlux, formatINR, type Category, type Tx } from "@/store/flux-store";
+     5→     5→import { LineChart, ProgressRing } from "@/components/flux/charts";
+     6→     6→import { Icon } from "@/components/flux/icon";
+     7→     7→import { useToast } from "@/hooks/use-toast";
+     8→     8→
+     9→     9→/* ── Daily spending demo series (matches original expense.html) ── */
+    10→    10→const DAILY_SERIES = [
+    11→    11→  2400, 1800, 3200, 1200, 2800, 900, 2100, 3500, 1600, 2200,
+    12→    12→  1900, 2700, 2100, 1400, 900, 1200, 1600, 1300,
+    13→    13→];
+    14→    14→const DAILY_LABELS = DAILY_SERIES.map((_, i) => String(i + 1));
+    15→    15→
+    16→    16→/* ── Tone → progress-bar fill class / color ── */
+    17→    17→function toneFill(tone: string): { className?: string; color?: string } {
+    18→    18→  switch (tone) {
+    19→    19→    case "acc":   return { className: "pf pf-acc" };
+    20→    20→    case "red":   return { className: "pf pf-red" };
+    21→    21→    case "amb":   return { className: "pf pf-amb" };
+    22→    22→    case "teal":  return { className: "pf pf-teal" };
+    23→    23→    case "grn":   return { className: "pf pf-grn" };
+    24→    24→    case "indigo": return { color: "var(--indigo)" };
+    25→    25→    case "t2":    return { color: "var(--t3)" };
+    26→    26→    default:      return { className: "pf pf-acc" };
+    27→    27→  }
+    28→    28→}
+    29→    29→
+    30→    30→function statusFor(spent: number, limit: number): { cls: string; label: string } {
+    31→    31→  if (limit <= 0) return { cls: "badge bk", label: "—" };
+    32→    32→  const r = spent / limit;
+    33→    33→  if (r > 1) return { cls: "badge br", label: "Over" };
+    34→    34→  if (r >= 0.9) return { cls: "badge ba", label: "Tight" };
+    35→    35→  return { cls: "badge bg", label: "Under" };
+    36→    36→}
+    37→    37→
+    38→    38→/* ── Transaction helpers ── */
+    39→    39→function txCategoryBadge(category: string): string {
+    40→    40→  switch (category) {
+    41→    41→    case "Income":    return "badge bg";
+    42→    42→    case "Food":      return "badge br";
+    43→    43→    case "Utilities": return "badge ba";
+    44→    44→    case "Vault":     return "badge bt";
+    45→    45→    case "Tools":     return "badge ba";
+    46→    46→    case "Transport": return "badge br";
+    47→    47→    default:          return "badge bk";
+    48→    48→  }
+    49→    49→}
+    50→    50→
+    51→    51→function txAmountColor(flow: string): string {
+    52→    52→  switch (flow) {
+    53→    53→    case "in":    return "var(--grn)";
+    54→    54→    case "out":   return "var(--red)";
+    55→    55→    case "vault": return "var(--teal)";
+    56→    56→    default:      return "var(--t1)";
+    57→    57→  }
+    58→    58→}
+    59→    59→
+    60→    60→function txAmountSign(flow: string): string {
+    61→    61→  switch (flow) {
+    62→    62→    case "in":  return "+";
+    63→    63→    case "out": return "−";
+    64→    64→    default:    return "";
+    65→    65→  }
+    66→    66→}
+    67→    67→
+    68→    68→function formatTxDate(date: string | Date): string {
+    69→    69→  const d = typeof date === "string" ? new Date(date) : date;
+    70→    70→  if (isNaN(d.getTime())) return "—";
+    71→    71→  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    72→    72→  return `${months[d.getMonth()]} ${d.getDate()}`;
+    73→    73→}
+    74→    74→
+    75→    75→export function SpendingView() {
+    76→    76→  const snapshot = useFlux((s) => s.snapshot);
+    77→    77→  const categories = useFlux((s) => s.categories);
+    78→    78→  const load = useFlux((s) => s.load);
+    79→    79→  const { toast } = useToast();
+    80→    80→
+    81→    81→  const [showForm, setShowForm] = useState(false);
+    82→    82→  const [label, setLabel] = useState("");
+    83→    83→  const [amount, setAmount] = useState("");
+    84→    84→  const [category, setCategory] = useState("");
+    85→    85→  const [submitting, setSubmitting] = useState(false);
+    86→    86→
+    87→    87→  const transactions = useFlux((s) => s.transactions);
+    88→    88→  const [txSearch, setTxSearch] = useState("");
+    89→    89→  const [txCategory, setTxCategory] = useState<string>("All");
+    90→    90→  const [txFlow, setTxFlow] = useState<string>("All");
+    91→    91→  const [searchFocused, setSearchFocused] = useState(false);
+    92→    92→
+    93→    93→  /* Derived spending metrics */
+    94→    94→  const m = useMemo(() => {
+    95→    95→    const income = snapshot?.income ?? 0;
+    96→    96→    const spending = snapshot?.spending ?? 0;
+    97→    97→    const daysInMonth = snapshot?.daysInMonth ?? 31;
+    98→    98→    const daysPassed = snapshot?.daysPassed ?? 0;
+    99→    99→    const daysLeft = Math.max(1, daysInMonth - daysPassed);
+   100→   100→    const remaining = Math.max(0, income - spending);
+   101→   101→    const pct = income > 0 ? (spending / income) * 100 : 0;
+   102→   102→    const dailyTarget = remaining / daysLeft;
+   103→   103→
+   104→   104→    // Zone from ratio
+   105→   105→    let zone: { badge: string; label: string; ringColor: "grn" | "amb" | "red"; name: string };
+   106→   106→    if (pct < 50)       zone = { badge: "badge bg", label: "Safe zone",      ringColor: "grn", name: "Safe" };
+   107→   107→    else if (pct <= 70) zone = { badge: "badge ba", label: "Moderate zone",  ringColor: "amb", name: "Moderate" };
+   108→   108→    else                zone = { badge: "badge br", label: "Risk zone",      ringColor: "red", name: "Risk" };
+   109→   109→
+   110→   110→    // Financial ratios
+   111→   111→    const expenseRatio = pct;
+   112→   112→    // assume vault contribution = 10% of income if vault activity exists; keep simple 10% baseline
+   113→   113→    const vaultContributionPct = 10;
+   114→   114→    const savingsRate = Math.max(0, 100 - expenseRatio - vaultContributionPct);
+   115→   115→
+   116→   116→    return {
+   117→   117→      income, spending, remaining, pct, dailyTarget, daysLeft,
+   118→   118→      zone, expenseRatio, savingsRate, vaultContributionPct,
+   119→   119→    };
+   120→   120→  }, [snapshot]);
+   121→   121→
+   122→   122→  const sortedCats = useMemo(
+   123→   123→    () => [...categories].sort((a, b) => a.order - b.order),
+   124→   124→    [categories]
+   125→   125→  );
+   126→   126→
+   127→   127→  /* Filtered transactions (search + category + flow) */
+   128→   128→  const txView = useMemo(() => {
+   129→   129→    const allCategories = Array.from(
+   130→   130→      new Set(transactions.map((t) => t.category))
+   131→   131→    ).sort();
+   132→   132→
+   133→   133→    const filtered = transactions.filter((t) => {
+   134→   134→      const q = txSearch.trim().toLowerCase();
+   135→   135→      if (q && !t.label.toLowerCase().includes(q)) return false;
+   136→   136→      if (txCategory !== "All" && t.category !== txCategory) return false;
+   137→   137→      if (txFlow === "Income" && t.flow !== "in") return false;
+   138→   138→      if (txFlow === "Expenses" && t.flow !== "out") return false;
+   139→   139→      return true;
+   140→   140→    });
+   141→   141→
+   142→   142→    const income = filtered
+   143→   143→      .filter((t) => t.flow === "in")
+   144→   144→      .reduce((s, t) => s + t.amount, 0);
+   145→   145→    const expenses = filtered
+   146→   146→      .filter((t) => t.flow === "out")
+   147→   147→      .reduce((s, t) => s + t.amount, 0);
+   148→   148→    const net = income - expenses;
+   149→   149→
+   150→   150→    return {
+   151→   151→      allCategories,
+   152→   152→      rows: filtered.slice(0, 50),
+   153→   153→      shownCount: filtered.length,
+   154→   154→      totalCount: transactions.length,
+   155→   155→      income,
+   156→   156→      expenses,
+   157→   157→      net,
+   158→   158→    };
+   159→   159→  }, [transactions, txSearch, txCategory, txFlow]);
+   160→   160→
+   161→   161→  async function submitExpense(e: React.FormEvent) {
+   162→   162→    e.preventDefault();
+   163→   163→    if (!label.trim() || !amount) return;
+   164→   164→    setSubmitting(true);
+   165→   165→    try {
+   166→   166→      const amt = Number(amount);
+   167→   167→      const today = new Date().toISOString();
+   168→   168→      const res = await fetch("/api/transactions", {
+   169→   169→        method: "POST",
+   170→   170→        headers: { "Content-Type": "application/json" },
+   171→   171→        body: JSON.stringify({
+   172→   172→          label: label.trim(),
+   173→   173→          date: today,
+   174→   174→          category: category || "Other",
+   175→   175→          amount: amt,
+   176→   176→          flow: "out",
+   177→   177→          tone: "br",
+   178→   178→        }),
+   179→   179→      });
+   180→   180→      if (!res.ok) throw new Error("Failed to add expense");
+   181→   181→      await load();
+   182→   182→      toast({ title: "Expense added" });
+   183→   183→      setLabel(""); setAmount(""); setCategory(""); setShowForm(false);
+   184→   184→    } catch (err) {
+   185→   185→      toast({ title: "Couldn't add expense", description: (err as Error).message });
+   186→   186→    } finally {
+   187→   187→      setSubmitting(false);
+   188→   188→    }
+   189→   189→  }
+   190→   190→
+   191→   191→  return (
+   192→   192→    <>
+   193→   193→      {/* ─── Top row: spending meter + ratios ─── */}
+   194→   194→      <div className="g32 mb2">
+   195→   195→        {/* Spending meter */}
+   196→   196→        <div className="card">
+   197→   197→          <div className="card-h">
+   198→   198→            <div>
+   199→   199→              <div className="card-t">Spending meter</div>
+   200→   200→              <div className="card-s">
+   201→   201→                {formatINR(m.spending)} spent of {formatINR(m.income)} income
+   202→   202→              </div>
+   203→   203→            </div>
+   204→   204→            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+   205→   205→              <span className={m.zone.badge}>{m.zone.label}</span>
+   206→   206→              <button
+   207→   207→                className="btn btn-secondary btn-sm"
+   208→   208→                onClick={() => setShowForm((v) => !v)}
+   209→   209→                type="button"
+   210→   210→              >
+   211→   211→                <Icon name="plus" size={13} /> Add expense
+   212→   212→              </button>
+   213→   213→            </div>
+   214→   214→          </div>
+   215→   215→
+   216→   216→          {/* Inline add-expense form */}
+   217→   217→          {showForm && (
+   218→   218→            <form
+   219→   219→              onSubmit={submitExpense}
+   220→   220→              className="flux-surface-2"
+   221→   221→              style={{
+   222→   222→                display: "grid",
+   223→   223→                gridTemplateColumns: "1.6fr 1fr 1.2fr auto",
+   224→   224→                gap: 8,
+   225→   225→                padding: 12,
+   226→   226→                borderRadius: "var(--radius-md)",
+   227→   227→                border: "1px solid var(--bdr)",
+   228→   228→                marginBottom: 16,
+   229→   229→                alignItems: "end",
+   230→   230→              }}
+   231→   231→            >
+   232→   232→              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+   233→   233→                <span className="label-sm">Label</span>
+   234→   234→                <input
+   235→   235→                  value={label}
+   236→   236→                  onChange={(e) => setLabel(e.target.value)}
+   237→   237→                  placeholder="e.g. Groceries"
+   238→   238→                  required
+   239→   239→                  style={inputStyle}
+   240→   240→                />
+   241→   241→              </label>
+   242→   242→              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+   243→   243→                <span className="label-sm">Amount (₹)</span>
+   244→   244→                <input
+   245→   245→                  type="number"
+   246→   246→                  min={1}
+   247→   247→                  value={amount}
+   248→   248→                  onChange={(e) => setAmount(e.target.value)}
+   249→   249→                  placeholder="0"
+   250→   250→                  required
+   251→   251→                  style={inputStyle}
+   252→   252→                />
+   253→   253→              </label>
+   254→   254→              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+   255→   255→                <span className="label-sm">Category</span>
+   256→   256→                <select
+   257→   257→                  value={category}
+   258→   258→                  onChange={(e) => setCategory(e.target.value)}
+   259→   259→                  style={inputStyle}
+   260→   260→                >
+   261→   261→                  <option value="">Other</option>
+   262→   262→                  {sortedCats.map((c: Category) => (
+   263→   263→                    <option key={c.id} value={c.label}>{c.label}</option>
+   264→   264→                  ))}
+   265→   265→                </select>
+   266→   266→              </label>
+   267→   267→              <button
+   268→   268→                type="submit"
+   269→   269→                className="btn btn-primary"
+   270→   270→                disabled={submitting}
+   271→   271→                style={{ height: 34 }}
+   272→   272→              >
+   273→   273→                {submitting ? "Adding…" : "Submit"}
+   274→   274→              </button>
+   275→   275→            </form>
+   276→   276→          )}
+   277→   277→
+   278→   278→          {/* Body: ring + stat grid */}
+   279→   279→          <div style={{ display: "flex", alignItems: "center", gap: 30, flexWrap: "wrap" }}>
+   280→   280→            <div style={{ flexShrink: 0 }}>
+   281→   281→              <ProgressRing
+   282→   282→                value={m.pct}
+   283→   283→                size={155}
+   284→   284→                thickness={12}
+   285→   285→                color={m.zone.ringColor}
+   286→   286→                label={`${Math.round(m.pct)}%`}
+   287→   287→                sublabel="spent"
+   288→   288→              />
+   289→   289→            </div>
+   290→   290→
+   291→   291→            <div style={{ flex: 1, minWidth: 220 }}>
+   292→   292→              {/* 2x2 stat grid */}
+   293→   293→              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+   294→   294→                <StatTile label="Spent"        value={formatINR(m.spending)}     color="var(--red)" />
+   295→   295→                <StatTile label="Remaining"    value={formatINR(m.remaining)}    color="var(--grn)" />
+   296→   296→                <StatTile label="Daily target" value={formatINR(m.dailyTarget)}  color="var(--t1)" />
+   297→   297→                <StatTile label="Days left"    value={String(m.daysLeft)}        color="var(--t1)" />
+   298→   298→              </div>
+   299→   299→
+   300→   300→              {/* Spending zone */}
+   301→   301→              <div style={{ marginBottom: 8 }}>
+   302→   302→                <div className="label-sm" style={{ marginBottom: 6 }}>Spending zone</div>
+   303→   303→                <div className="zone-bar" style={{ marginBottom: 5 }}>
+   304→   304→                  <div className="zs zs-safe" />
+   305→   305→                  <div className="zs zs-mod" />
+   306→   306→                  <div className="zs zs-risk" />
+   307→   307→                </div>
+   308→   308→                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--t3)", marginBottom: 6 }}>
+   309→   309→                  <span>Safe &lt;50%</span>
+   310→   310→                  <span>Moderate 50-70%</span>
+   311→   311→                  <span>Risk &gt;70%</span>
+   312→   312→                </div>
+   313→   313→              </div>
+   314→   314→
+   315→   315→              {/* Insight */}
+   316→   316→              <div className="ins ins-amb" style={{ margin: 0 }}>
+   317→   317→                <div className="ins-h">
+   318→   318→                  You are in {m.zone.name} at {Math.round(m.pct)}%
+   319→   319→                </div>
+   320→   320→                <div className="ins-b">
+   321→   321→                  Spend no more than <strong>{formatINR(m.dailyTarget)}/day</strong> to
+   322→   322→                  finish in the Safe zone with {m.daysLeft} days remaining.
+   323→   323→                </div>
+   324→   324→              </div>
+   325→   325→            </div>
+   326→   326→          </div>
+   327→   327→        </div>
+   328→   328→
+   329→   329→        {/* Right stack: ratios + recommended action */}
+   330→   330→        <div className="stack">
+   331→   331→          <div className="card card-sm">
+   332→   332→            <div className="card-t" style={{ marginBottom: 12 }}>Financial ratios</div>
+   333→   333→            <RatioRow label="Expense ratio"     value={`${Math.round(m.expenseRatio)}%`}    color="var(--amb)" />
+   334→   334→            <RatioRow label="Savings rate"      value={`${Math.round(m.savingsRate)}%`}     color="var(--grn)" />
+   335→   335→            <RatioRow label="Vault contribution" value={`${m.vaultContributionPct}%`}       color="var(--teal)" />
+   336→   336→            <RatioRow label="Target ratio"      value="≤60%"                                  color="var(--t3)" />
+   337→   337→          </div>
+   338→   338→
+   339→   339→          <MonthOverMonth
+   340→   340→            thisMonth={m.spending}
+   341→   341→            lastMonth={30000}
+   342→   342→            thisLabel={snapshot?.monthShort ?? "Mar"}
+   343→   343→            lastLabel="Feb"
+   344→   344→          />
+   345→   345→
+   346→   346→          <div className="ins ins-acc" style={{ margin: 0, padding: "12px 14px" }}>
+   347→   347→            <div className="ins-h">Recommended action</div>
+   348→   348→            <div className="ins-b">Review category pressure and log anything still missing.</div>
+   349→   349→          </div>
+   350→   350→        </div>
+   351→   351→      </div>
+   352→   352→
+   353→   353→      {/* ─── Category breakdown ─── */}
+   354→   354→      <div className="card mb2">
+   355→   355→        <div className="card-h">
+   356→   356→          <div>
+   357→   357→            <div className="card-t">Category breakdown</div>
+   358→   358→            <div className="card-s">{snapshot?.monthLabel ?? ""} spending vs monthly limits</div>
+   359→   359→          </div>
+   360→   360→        </div>
+   361→   361→        <table className="table">
+   362→   362→          <thead>
+   363→   363→            <tr>
+   364→   364→              <th>Category</th>
+   365→   365→              <th>Spent</th>
+   366→   366→              <th>Limit</th>
+   367→   367→              <th style={{ width: "38%" }}>Usage</th>
+   368→   368→              <th>Status</th>
+   369→   369→            </tr>
+   370→   370→          </thead>
+   371→   371→          <tbody>
+   372→   372→            {sortedCats.map((c: Category) => {
+   373→   373→              const usagePct = c.limit > 0 ? Math.min(100, (c.spent / c.limit) * 100) : 0;
+   374→   374→              const fill = toneFill(c.tone);
+   375→   375→              const status = statusFor(c.spent, c.limit);
+   376→   376→              return (
+   377→   377→                <tr key={c.id}>
+   378→   378→                  <td>
+   379→   379→                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+   380→   380→                      <span
+   381→   381→                        className="li-icon"
+   382→   382→                        style={{
+   383→   383→                          width: 26, height: 26, borderRadius: 7,
+   384→   384→                          background: "var(--bg3)", color: "var(--t2)",
+   385→   385→                        }}
+   386→   386→                      >
+   387→   387→                        <Icon name={c.icon} size={14} />
+   388→   388→                      </span>
+   389→   389→                      <span className="td-m">{c.label}</span>
+   390→   390→                    </div>
+   391→   391→                  </td>
+   392→   392→                  <td className="td-n">{formatINR(c.spent)}</td>
+   393→   393→                  <td className="td-n">{formatINR(c.limit)}</td>
+   394→   394→                  <td>
+   395→   395→                    <div className="prog" style={{ height: 6 }}>
+   396→   396→                      <div
+   397→   397→                        className={fill.className}
+   398→   398→                        style={{
+   399→   399→                          width: `${usagePct}%`,
+   400→   400→                          ...(fill.color ? { background: fill.color } : {}),
+   401→   401→                        }}
+   402→   402→                      />
+   403→   403→                    </div>
+   404→   404→                  </td>
+   405→   405→                  <td>
+   406→   406→                    <span className={status.cls}>{status.label}</span>
+   407→   407→                  </td>
+   408→   408→                </tr>
+   409→   409→              );
+   410→   410→            })}
+   411→   411→            {sortedCats.length === 0 && (
+   412→   412→              <tr>
+   413→   413→                <td colSpan={5} style={{ textAlign: "center", color: "var(--t3)", padding: 24 }}>
+   414→   414→                  No categories yet.
+   415→   415→                </td>
+   416→   416→              </tr>
+   417→   417→            )}
+   418→   418→          </tbody>
+   419→   419→        </table>
+   420→   420→      </div>
+   421→   421→
+   422→   422→      {/* ─── Daily spending chart ─── */}
+   423→   423→      <div className="card mb2">
+   424→   424→        <div className="card-h">
+   425→   425→          <div>
+   426→   426→            <div className="card-t">Daily spending</div>
+   427→   427→            <div className="card-s">Daily pace</div>
+   428→   428→          </div>
+   429→   429→          <div style={{ display: "flex", gap: 12, fontSize: 11, alignItems: "center" }}>
+   430→   430→            <span style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--t3)" }}>
+   431→   431→              <span style={{ width: 12, height: 0, borderTop: "2px dashed var(--acc)", display: "inline-block" }} />
+   432→   432→              <span>Daily target</span>
+   433→   433→            </span>
+   434→   434→            <span style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--t3)" }}>
+   435→   435→              <span style={{ width: 12, height: 2, background: "var(--amb)", borderRadius: 2, display: "inline-block" }} />
+   436→   436→              <span>Daily spend</span>
+   437→   437→            </span>
+   438→   438→          </div>
+   439→   439→        </div>
+   440→   440→        <LineChart
+   441→   441→          height={165}
+   442→   442→          labels={DAILY_LABELS}
+   443→   443→          formatVal={(n) => formatINR(n, { compact: true })}
+   444→   444→          lines={[
+   445→   445→            { data: DAILY_SERIES, color: "amb", label: "Daily spend" },
+   446→   446→            {
+   447→   447→              data: DAILY_SERIES.map(() => Math.round(m.dailyTarget)),
+   448→   448→              color: "acc",
+   449→   449→              label: "Daily target",
+   450→   450→              dashed: true,
+   451→   451→            },
+   452→   452→          ]}
+   453→   453→        />
+   454→   454→      </div>
+   455→   455→
+   456→   456→      {/* ─── All transactions ─── */}
+   457→   457→      <div className="card card-flush">
+   458→   458→        <div style={{ padding: "18px 18px 0" }}>
+   459→   459→          <div className="card-h" style={{ marginBottom: 0 }}>
+   460→   460→            <div>
+   461→   461→              <div className="card-t">All transactions</div>
+   462→   462→              <div className="card-s">Search and filter your spending</div>
+   463→   463→            </div>
+   464→   464→            <button
+   465→   465→              className="btn btn-secondary btn-sm"
+   466→   466→              type="button"
+   467→   467→              onClick={() => setShowForm((v) => !v)}
+   468→   468→            >
+   469→   469→              <Icon name="plus" size={13} /> Add expense
+   470→   470→            </button>
+   471→   471→          </div>
+   472→   472→        </div>
+   473→   473→
+   474→   474→        {/* Filter bar */}
+   475→   475→        <div
+   476→   476→          style={{
+   477→   477→            padding: "12px 18px",
+   478→   478→            display: "flex",
+   479→   479→            flexWrap: "wrap",
+   480→   480→            gap: 10,
+   481→   481→            alignItems: "center",
+   482→   482→            borderTop: "1px solid var(--bdr)",
+   483→   483→            borderBottom: "1px solid var(--bdr)",
+   484→   484→            marginTop: 13,
+   485→   485→            background: "var(--surf2)",
+   486→   486→          }}
+   487→   487→        >
+   488→   488→          {/* Search input */}
+   489→   489→          <div style={{ position: "relative", flex: "1 1 220px", minWidth: 200 }}>
+   490→   490→            <span
+   491→   491→              style={{
+   492→   492→                position: "absolute",
+   493→   493→                left: 10,
+   494→   494→                top: "50%",
+   495→   495→                transform: "translateY(-50%)",
+   496→   496→                color: "var(--t3)",
+   497→   497→                pointerEvents: "none",
+   498→   498→                display: "flex",
+   499→   499→                alignItems: "center",
+   500→   500→              }}
+   501→   501→            >
+   502→   502→              <Icon name="search" size={14} />
+   503→   503→            </span>
+   504→   504→            <input
+   505→   505→              type="text"
+   506→   506→              value={txSearch}
+   507→   507→              onChange={(e) => setTxSearch(e.target.value)}
+   508→   508→              onFocus={() => setSearchFocused(true)}
+   509→   509→              onBlur={() => setSearchFocused(false)}
+   510→   510→              placeholder="Search transactions…"
+   511→   511→              aria-label="Search transactions"
+   512→   512→              style={{
+   513→   513→                ...inputStyle,
+   514→   514→                width: "100%",
+   515→   515→                paddingLeft: 32,
+   516→   516→                fontFamily: "var(--font-sans)",
+   517→   517→                borderColor: searchFocused ? "var(--acc)" : "var(--bdr)",
+   518→   518→                boxShadow: searchFocused ? "0 0 0 3px var(--accd)" : "none",
+   519→   519→              }}
+   520→   520→            />
+   521→   521→          </div>
+   522→   522→
+   523→   523→          {/* Category filter pills */}
+   524→   524→          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+   525→   525→            <FilterPill label="All" active={txCategory === "All"} onClick={() => setTxCategory("All")} />
+   526→   526→            {txView.allCategories.map((cat) => (
+   527→   527→              <FilterPill
+   528→   528→                key={cat}
+   529→   529→                label={cat}
+   530→   530→                active={txCategory === cat}
+   531→   531→                onClick={() => setTxCategory(cat)}
+   532→   532→              />
+   533→   533→            ))}
+   534→   534→          </div>
+   535→   535→
+   536→   536→          {/* Flow filter */}
+   537→   537→          <div style={{ display: "flex", gap: 5 }}>
+   538→   538→            {(["All", "Income", "Expenses"] as const).map((f) => (
+   539→   539→              <FilterPill
+   540→   540→                key={f}
+   541→   541→                label={f}
+   542→   542→                active={txFlow === f}
+   543→   543→                onClick={() => setTxFlow(f)}
+   544→   544→              />
+   545→   545→            ))}
+   546→   546→          </div>
+   547→   547→        </div>
+   548→   548→
+   549→   549→        {/* Table */}
+   550→   550→        <table className="table">
+   551→   551→          <thead>
+   552→   552→            <tr>
+   553→   553→              <th>Description</th>
+   554→   554→              <th>Date</th>
+   555→   555→              <th>Category</th>
+   556→   556→              <th style={{ textAlign: "right" }}>Amount</th>
+   557→   557→            </tr>
+   558→   558→          </thead>
+   559→   559→          <tbody>
+   560→   560→            {txView.rows.map((t: Tx) => (
+   561→   561→              <tr key={t.id}>
+   562→   562→                <td className="td-m">{t.label}</td>
+   563→   563→                <td>{formatTxDate(t.date)}</td>
+   564→   564→                <td>
+   565→   565→                  <span className={txCategoryBadge(t.category)}>{t.category}</span>
+   566→   566→                </td>
+   567→   567→                <td
+   568→   568→                  className="td-n"
+   569→   569→                  style={{ textAlign: "right", color: txAmountColor(t.flow) }}
+   570→   570→                >
+   571→   571→                  {txAmountSign(t.flow)}{formatINR(Math.abs(t.amount))}
+   572→   572→                </td>
+   573→   573→              </tr>
+   574→   574→            ))}
+   575→   575→            {txView.rows.length === 0 && (
+   576→   576→              <tr>
+   577→   577→                <td
+   578→   578→                  colSpan={4}
+   579→   579→                  style={{ textAlign: "center", color: "var(--t3)", padding: 28 }}
+   580→   580→                >
+   581→   581→                  No transactions match your filters
+   582→   582→                </td>
+   583→   583→              </tr>
+   584→   584→            )}
+   585→   585→          </tbody>
+   586→   586→        </table>
+   587→   587→
+   588→   588→        {/* Summary footer */}
+   589→   589→        <div
+   590→   590→          className="flux-surface-2"
+   591→   591→          style={{
+   592→   592→            padding: "12px 18px",
+   593→   593→            borderTop: "1px solid var(--bdr)",
+   594→   594→            fontSize: 11.5,
+   595→   595→            color: "var(--t3)",
+   596→   596→            display: "flex",
+   597→   597→            flexWrap: "wrap",
+   598→   598→            gap: "3px 8px",
+   599→   599→            alignItems: "center",
+   600→   600→          }}
+   601→   601→        >
+   602→   602→          <span>
+   603→   603→            Showing{" "}
+   604→   604→            <span className="flux-mono" style={{ color: "var(--t1)", fontWeight: 600 }}>
+   605→   605→              {txView.shownCount}
+   606→   606→            </span>{" "}
+   607→   607→            of{" "}
+   608→   608→            <span className="flux-mono" style={{ color: "var(--t1)", fontWeight: 600 }}>
+   609→   609→              {txView.totalCount}
+   610→   610→            </span>{" "}
+   611→   611→            transactions
+   612→   612→          </span>
+   613→   613→          <span style={{ color: "var(--t4)" }}>·</span>
+   614→   614→          <span>
+   615→   615→            Total:{" "}
+   616→   616→            <span className="flux-mono" style={{ color: "var(--grn)", fontWeight: 600 }}>
+   617→   617→              +{formatINR(txView.income, { compact: true })}
+   618→   618→            </span>
+   619→   619→            <span style={{ margin: "0 4px" }}>(income) /</span>
+   620→   620→            <span className="flux-mono" style={{ color: "var(--red)", fontWeight: 600 }}>
+   621→   621→              −{formatINR(txView.expenses, { compact: true })}
+   622→   622→            </span>
+   623→   623→            <span style={{ margin: "0 4px" }}>(expenses) /</span>
+   624→   624→            <span
+   625→   625→              className="flux-mono"
+   626→   626→              style={{
+   627→   627→                color: txView.net >= 0 ? "var(--grn)" : "var(--red)",
+   628→   628→                fontWeight: 600,
+   629→   629→              }}
+   630→   630→            >
+   631→   631→              {txView.net >= 0 ? "+" : "−"}
+   632→   632→              {formatINR(Math.abs(txView.net), { compact: true })}
+   633→   633→            </span>
+   634→   634→            <span style={{ marginLeft: 4 }}>(net)</span>
+   635→   635→          </span>
+   636→   636→        </div>
+   637→   637→      </div>
+   638→   638→    </>
+   639→   639→  );
+   640→   640→}
+   641→   641→
+   642→   642→/* ─── Filter pill button (used in transactions filter bar) ─── */
+   643→   643→function FilterPill({
+   644→   644→  label,
+   645→   645→  active,
+   646→   646→  onClick,
+   647→   647→}: {
+   648→   648→  label: string;
+   649→   649→  active: boolean;
+   650→   650→  onClick: () => void;
+   651→   651→}) {
+   652→   652→  return (
+   653→   653→    <button
+   654→   654→      type="button"
+   655→   655→      className={`badge ${active ? "bl" : "bk"}`}
+   656→   656→      onClick={onClick}
+   657→   657→      style={{ cursor: "pointer", border: "none" }}
+   658→   658→    >
+   659→   659→      {label}
+   660→   660→    </button>
+   661→   661→  );
+   662→   662→}
+   663→   663→
+   664→   664→/* ─── Month-over-month mini comparison card ─── */
+   665→   665→function MonthOverMonth({
+   666→   666→  thisMonth,
+   667→   667→  lastMonth,
+   668→   668→  thisLabel,
+   669→   669→  lastLabel,
+   670→   670→}: {
+   671→   671→  thisMonth: number;
+   672→   672→  lastMonth: number;
+   673→   673→  thisLabel: string;
+   674→   674→  lastLabel: string;
+   675→   675→}) {
+   676→   676→  const delta = thisMonth - lastMonth;
+   677→   677→  const pctDelta = lastMonth > 0 ? (delta / lastMonth) * 100 : 0;
+   678→   678→  const isFlat = delta === 0;
+   679→   679→  const isDown = delta < 0;
+   680→   680→  const maxBar = Math.max(thisMonth, lastMonth, 1);
+   681→   681→  const hThis = Math.max(10, Math.round((thisMonth / maxBar) * 96));
+   682→   682→  const hLast = Math.max(10, Math.round((lastMonth / maxBar) * 96));
+   683→   683→  const deltaColor = isFlat ? "var(--t3)" : isDown ? "var(--grn)" : "var(--red)";
+   684→   684→  const deltaBg = isFlat ? "var(--bg3)" : isDown ? "var(--grnd)" : "var(--redd)";
+   685→   685→
+   686→   686→  return (
+   687→   687→    <div className="card card-sm">
+   688→   688→      <div className="card-t" style={{ marginBottom: 4 }}>Month-over-month</div>
+   689→   689→      <div className="card-s" style={{ marginBottom: 12 }}>Spending vs last month</div>
+   690→   690→
+   691→   691→      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+   692→   692→        <span
+   693→   693→          className="flux-mono"
+   694→   694→          style={{
+   695→   695→            fontSize: 22,
+   696→   696→            fontWeight: 600,
+   697→   697→            color: "var(--t1)",
+   698→   698→            letterSpacing: "-.02em",
+   699→   699→          }}
+   700→   700→        >
+   701→   701→          {formatINR(thisMonth, { compact: true })}
+   702→   702→        </span>
+   703→   703→        <span
+   704→   704→          className="flux-mono"
+   705→   705→          style={{
+   706→   706→            display: "inline-flex",
+   707→   707→            alignItems: "center",
+   708→   708→            gap: 3,
+   709→   709→            fontSize: 11,
+   710→   710→            fontWeight: 700,
+   711→   711→            color: deltaColor,
+   712→   712→            background: deltaBg,
+   713→   713→            padding: "2px 7px",
+   714→   714→            borderRadius: 100,
+   715→   715→          }}
+   716→   716→        >
+   717→   717→          <Icon name={isFlat ? "info" : isDown ? "down" : "up"} size={11} />
+   718→   718→          {isFlat ? "0%" : `${Math.abs(Math.round(pctDelta))}%`}
+   719→   719→        </span>
+   720→   720→      </div>
+   721→   721→      <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 14 }}>
+   722→   722→        vs {formatINR(lastMonth, { compact: true })} in {lastLabel}
+   723→   723→      </div>
+   724→   724→
+   725→   725→      {/* 2-bar mini comparison */}
+   726→   726→      <div
+   727→   727→        style={{
+   728→   728→          display: "flex",
+   729→   729→          alignItems: "end",
+   730→   730→          justifyContent: "center",
+   731→   731→          gap: 24,
+   732→   732→          height: 110,
+   733→   733→        }}
+   734→   734→      >
+   735→   735→        <div
+   736→   736→          style={{
+   737→   737→            display: "flex",
+   738→   738→            flexDirection: "column",
+   739→   739→            alignItems: "center",
+   740→   740→            gap: 6,
+   741→   741→            flex: "0 0 56px",
+   742→   742→          }}
+   743→   743→        >
+   744→   744→          <div
+   745→   745→            className="flux-mono"
+   746→   746→            style={{ fontSize: 10.5, fontWeight: 600, color: "var(--t2)" }}
+   747→   747→          >
+   748→   748→            {formatINR(lastMonth, { compact: true })}
+   749→   749→          </div>
+   750→   750→          <div
+   751→   751→            style={{
+   752→   752→              width: "100%",
+   753→   753→              height: hLast,
+   754→   754→              background: "var(--bg3)",
+   755→   755→              borderRadius: "6px 6px 0 0",
+   756→   756→            }}
+   757→   757→          />
+   758→   758→          <div className="label-sm" style={{ marginBottom: 0 }}>{lastLabel}</div>
+   759→   759→        </div>
+   760→   760→        <div
+   761→   761→          style={{
+   762→   762→            display: "flex",
+   763→   763→            flexDirection: "column",
+   764→   764→            alignItems: "center",
+   765→   765→            gap: 6,
+   766→   766→            flex: "0 0 56px",
+   767→   767→          }}
+   768→   768→        >
+   769→   769→          <div
+   770→   770→            className="flux-mono"
+   771→   771→            style={{ fontSize: 10.5, fontWeight: 600, color: "var(--amb)" }}
+   772→   772→          >
+   773→   773→            {formatINR(thisMonth, { compact: true })}
+   774→   774→          </div>
+   775→   775→          <div
+   776→   776→            style={{
+   777→   777→              width: "100%",
+   778→   778→              height: hThis,
+   779→   779→              background: "var(--amb)",
+   780→   780→              borderRadius: "6px 6px 0 0",
+   781→   781→            }}
+   782→   782→          />
+   783→   783→          <div className="label-sm" style={{ marginBottom: 0 }}>{thisLabel}</div>
+   784→   784→        </div>
+   785→   785→      </div>
+   786→   786→    </div>
+   787→   787→  );
+   788→   788→}
+   789→   789→
+   790→   790→/* ─── Small subcomponents ─── */
+   791→   791→
+   792→   792→const inputStyle: React.CSSProperties = {
+   793→   793→  height: 34,
+   794→   794→  padding: "0 10px",
+   795→   795→  background: "var(--surf)",
+   796→   796→  border: "1px solid var(--bdr)",
+   797→   797→  borderRadius: "var(--radius-md)",
+   798→   798→  color: "var(--t1)",
+   799→   799→  fontSize: 12.5,
+   800→   800→  fontFamily: "var(--font-mono)",
+   801→   801→  outline: "none",
+   802→   802→};
+   803→   803→
+   804→   804→function StatTile({ label, value, color }: { label: string; value: string; color: string }) {
+   805→   805→  return (
+   806→   806→    <div
+   807→   807→      style={{
+   808→   808→        padding: "11px 13px",
+   809→   809→        background: "var(--surf2)",
+   810→   810→        border: "1px solid var(--bdr)",
+   811→   811→        borderRadius: "var(--radius-md)",
+   812→   812→      }}
+   813→   813→    >
+   814→   814→      <div className="label-sm" style={{ marginBottom: 3 }}>{label}</div>
+   815→   815→      <div
+   816→   816→        className="flux-mono"
+   817→   817→        style={{ fontSize: 18, fontWeight: 600, color }}
+   818→   818→      >
+   819→   819→        {value}
+   820→   820→      </div>
+   821→   821→    </div>
+   822→   822→  );
+   823→   823→}
+   824→   824→
+   825→   825→function RatioRow({ label, value, color }: { label: string; value: string; color: string }) {
+   826→   826→  return (
+   827→   827→    <div className="sr" style={{ padding: "9px 0" }}>
+   828→   828→      <span style={{ fontSize: 12.5, color: "var(--t2)" }}>{label}</span>
+   829→   829→      <span
+   830→   830→        className="flux-mono"
+   831→   831→        style={{ fontSize: 13.5, fontWeight: 600, color }}
+   832→   832→      >
+   833→   833→        {value}
+   834→   834→      </span>
+   835→   835→    </div>
+   836→   836→  );
+   837→   837→}
+   838→   838→

@@ -64,6 +64,75 @@ export async function chatWithFlux(
   }
 }
 
+/**
+ * Streaming version — calls onToken for each chunk of the response.
+ * Falls back to non-streaming if the SDK doesn't support stream mode.
+ */
+export async function chatWithFluxStream(
+  userMessage: string,
+  history: ChatTurn[],
+  context: Record<string, any> | undefined,
+  onToken: (chunk: string) => void
+): Promise<string> {
+  const zai = await getClient();
+
+  const contextBlock = context
+    ? `\n\n[CURRENT USER CONTEXT — use these numbers, do not contradict them]\n${JSON.stringify(context, null, 2)}`
+    : "";
+
+  const messages: any[] = [
+    { role: "assistant", content: SYSTEM_PROMPT + contextBlock },
+    ...history.slice(-10).map((h) => ({ role: h.role, content: h.content })),
+    { role: "user", content: userMessage },
+  ];
+
+  try {
+    // Try streaming mode
+    const stream: any = await zai.chat.completions.create({
+      messages,
+      thinking: { type: "disabled" },
+      stream: true,
+    });
+
+    let full = "";
+    // Handle async iterator
+    if (stream && typeof stream[Symbol.asyncIterator] === "function") {
+      for await (const chunk of stream) {
+        const delta = chunk?.choices?.[0]?.delta?.content ?? chunk?.choices?.[0]?.text ?? "";
+        if (delta) {
+          full += delta;
+          onToken(delta);
+        }
+      }
+      if (full) return full;
+      // empty stream — fall through to non-streaming
+    }
+    // If stream wasn't an async iterator, treat as regular completion
+    const content = stream?.choices?.[0]?.message?.content;
+    if (content) {
+      onToken(content);
+      return content;
+    }
+    return fallbackAnswer(userMessage, context);
+  } catch (err: any) {
+    console.error("[Flux LLM] stream error, falling back:", err?.message ?? err);
+    // Fallback to non-streaming
+    try {
+      const text = await chatWithFlux(userMessage, history, context);
+      // Simulate streaming by chunking the text
+      const words = text.split(/(\s+)/);
+      for (const w of words) {
+        onToken(w);
+      }
+      return text;
+    } catch {
+      const fb = fallbackAnswer(userMessage, context);
+      onToken(fb);
+      return fb;
+    }
+  }
+}
+
 /** Quick insight generator — used to populate the AI Insights panel without a full chat */
 export async function generateInsight(context: Record<string, any>): Promise<string> {
   const zai = await getClient();

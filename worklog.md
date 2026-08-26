@@ -700,3 +700,195 @@ Stage Summary:
 - All lint-clean, all views error-free, all features verified.
 - Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
 - Next opportunities: add streaming LLM responses for chat; add transaction pagination; add a spending trends LineChart (last 6 months); add a "share scenario" feature for the What-If Simulator; add dark/light/paper keyboard shortcut preview; add a notifications dropdown in the topbar.
+
+---
+Task ID: R5-2
+Agent: general-purpose
+Task: Add a 6-month spending trends LineChart + transaction pagination + alternating row colors to the Spending view.
+
+Work Log:
+- Read worklog R4-ROUND context + spending.tsx + flux-store.ts + charts.tsx (LineChart with hover tooltips) + globals.css design tokens.
+- Modified only `/home/z/my-project/src/components/flux/views/spending.tsx`.
+
+Changes:
+1. **6-month spending trend LineChart** (new card inserted BELOW the daily-spending chart):
+   - Title "6-month spending trend", subtitle "Income vs spending over the last 6 months".
+   - Legend chips (Income=acc line, Spending=red line) in the card header.
+   - `<LineChart height={180}>` with 2 lines: Income `[42000, 58000, 46000, 49000, 44000, snapshot.income]` (color "acc"), Spending `[30000, 38000, 34000, 32000, 28000, snapshot.spending]` (color "red"); labels `["Oct","Nov","Dec","Jan","Feb","Mar"]`; formatVal = compact INR. The 6th point of each series is wired to the live `snapshot.income`/`snapshot.spending` so the trend always terminates on the current month.
+   - 3-col stat-callout grid (reusing `StatTile`): "6-mo avg income" (acc), "6-mo avg spending" (red), "6-mo avg savings" (grn, = avgIncome − avgSpending). All values compact INR via `flux-mono`.
+   - Savings-rate insight: `.ins ins-grn` when rate ≥ 20% (else `.ins ins-amb`), heading "Your savings rate over 6 months is X%", body showing the avg-savings/month math. With seed data → ~33% green.
+2. **Transaction pagination** (existing "All transactions" panel):
+   - `txView.rows` now returns the full filtered array (was `filtered.slice(0, 50)`).
+   - New `TX_PAGE_SIZE = 10` constant + `txPage` state + `useEffect` that resets `txPage` to 1 whenever `txSearch`/`txCategory`/`txFlow` change.
+   - New `txPagination` memo: `{ total, totalPages, current, start, end, pageRows }` with `current` clamped to `totalPages` so out-of-range pages can't render.
+   - Table body maps `txPagination.pageRows` (10-row slice) instead of all rows.
+   - Replaced the old summary footer with a single merged footer: LEFT = "Showing {start}–{end} of {total} transactions · Total: +₹X (income) / −₹Y (expenses) / ±₹Z (net)"; RIGHT = Prev (`btn btn-ghost btn-sm`, rotated chevron) + "Page {current} of {totalPages}" (`flux-mono`) + Next (`btn btn-ghost btn-sm`, chevron). Prev disabled on page 1, Next disabled on last page (opacity 0.4 + cursor-not-allowed inline style).
+3. **Alternating row backgrounds** on BOTH tables in the Spending view:
+   - Category breakdown: `sortedCats.map((c, i) => …)` → `<tr style={i % 2 === 0 ? { background: "var(--surf2)" } : undefined}>`.
+   - Transactions table: `txPagination.pageRows.map((t, i) => …)` → same parity rule (page-local index, so each page starts with a surf2 row).
+   - Even rows get `var(--surf2)` inline; odd rows get no inline background (transparent) so the existing `:hover` highlight still applies on odd rows.
+
+Style adherence:
+- All design-system classes (`card`, `card-h`, `card-t`, `card-s`, `mb2`, `btn btn-ghost btn-sm`, `flux-mono`, `ins ins-grn`/`ins-amb`, `badge`, `td-m`, `td-n`, `label-sm`, `table`).
+- No Tailwind color utilities. Currency via `formatINR`. Numbers via `flux-mono`.
+- "use client" preserved at top. Imports: added `useEffect`.
+
+Verification:
+- `cd /home/z/my-project && bun run lint` → exit 0, 0 errors, 0 warnings.
+- Did NOT start dev server (per instructions).
+- Next opportunities for R5+: streaming LLM chat responses; "share scenario" for What-If Simulator; notifications dropdown in topbar; keyboard-shortcut theme preview.
+
+---
+Task ID: R5-1
+Agent: general-purpose (sub-agent) — Round 5, task 1
+Task: Add a notifications dropdown to the topbar.
+
+Work Log:
+- Read worklog.md (R4-ROUND entry listed "add a notifications dropdown in the topbar" as a next opportunity — this task delivers it).
+- Read topbar.tsx (existing topbar: page title, vault balance pill, theme toggle, ShortcutsHelp, mobile chat button).
+- Read flux-store.ts (confirmed `useFlux`, `setView`, `formatINR` exports; `ViewKey` includes "dashboard").
+- Read icon.tsx (confirmed `bell`, `forecast`, `vault`, `warn`, `peak`, `calendar`, `info`, `check` all mapped).
+- Read globals.css (verified `.dot.dot-live`, `.li-icon`, `.flux-scroll`, `.flux-mono`, `.btn.btn-ghost.btn-sm`, `.theme-btn`, tone utilities `--accd/--grnd/--ambd/--teald/--redd`).
+- Read api/insights/route.ts (matched tone convention: peak→acc, spending→amb, vault→teal; matched `₹${Math.round(n).toLocaleString("en-IN")}` currency format).
+- Read prisma/schema.prisma (confirmed `ForecastRun.hybridMape`, `VaultTransaction.{type,flow,date,amount,label}`, `Snapshot.{income,spending,updatedAt,today,year,monthIndex,monthShort}`, `HeatmapDay.{day,level,amount}`).
+- Read lib/db.ts + lib/seed.ts (confirmed `db` and `ensureSeed` exports; `getFluxState` patterns to mirror).
+
+Files created:
+1. `/home/z/my-project/src/app/api/notifications/route.ts` — new GET route.
+2. `/home/z/my-project/src/components/flux/notifications-dropdown.tsx` — new "use client" component.
+
+Files modified:
+3. `/home/z/my-project/src/components/flux/topbar.tsx` — imported + rendered `<NotificationsDropdown />` between the vault balance pill and the theme toggle.
+4. `/home/z/my-project/src/app/globals.css` — appended `.notif-unread-dot` + `@keyframes notifPulse` + `@keyframes notifDropIn`.
+
+API route (`src/app/api/notifications/route.ts`):
+- `GET` returns `FluxNotification[]` (max 8, sorted by timestamp desc) derived from the current DB state.
+- Calls `ensureSeed()` first, then `Promise.all` queries: last 3 `forecastRun` (createdAt desc), last 3 `vaultTransaction` (flow=in, date desc), the snapshot, and all heatmapDays.
+- Notification sources:
+  • Forecast runs → type:"forecast", tone:"acc", title:`Forecast run #N completed`, body:`Projected ₹X, MAPE Y.Z%` (uses `r.hybridMape.toFixed(1)`).
+  • Vault deposits (flow=in) → type:"vault", tone:"teal". Title adapts to `v.type`: Auto→`Auto-saved ₹X to vault`, Interest→`Interest credited ₹X`, Manual→`Deposited ₹X to vault`, default→`Vault deposit ₹X`. Body = `v.label`.
+  • Spending alert (only if `spending/income > 0.65`) → type:"spending", tone:"amb", title:`Spending alert`, body:`You're at X% of income`, timestamp = `snap.updatedAt`.
+  • Peak day → type:"peak", tone:"acc". Computes the highest-amount upcoming heatmap day (`d.day >= snap.today`), formats as `Thu Mar 19` via `toLocaleDateString` weekday+month. Body = `<dayLabel> — keep it clear for higher earnings`.
+  • Ideal break window → type:"break", tone:"grn". Single pass over future heatmapDays to find the longest consecutive run of `level <= 1` days (≥2 long). Body = `Mar 21–23` (uses `snap.monthShort`).
+- Helpers: `toISO(d)` (Date|string → ISO string), `inr(n)` (₹ + Math.round + en-IN grouping), `formatDayShort(year,monthIndex,day)`.
+- Exported `FluxNotification`, `NotificationTone`, `NotificationType` types for any future consumer.
+
+Component (`src/components/flux/notifications-dropdown.tsx`):
+- `"use client"` at top.
+- Self-contained: owns `open`, `items`, `loading`, `readIds` state. No props.
+- Bell button: 32×32 `.theme-btn` matching the existing theme-toggle / shortcuts-help / mobile-chat button styles. `aria-expanded`, `aria-haspopup="dialog"`, `aria-label="Notifications"`.
+- Unread dot: rendered only when `unreadCount > 0`. Uses new `.notif-unread-dot` CSS class (red, pulsing, absolutely positioned top-right corner of the button). `aria-label={\`${unreadCount} unread\`}`.
+- Dropdown panel: rendered only when `open`. Inline styles for exact spec compliance:
+  • `position:absolute; top: calc(100% + 6px); right:0; width:340; maxHeight:420; overflowY:auto`
+  • `background: var(--surf); border:1px solid var(--bdr2); borderRadius:12; boxShadow: var(--s3); zIndex:50`
+  • `animation: notifDropIn .15s ease-out` (opacity 0→1, translateY -4→0)
+  • `className="flux-scroll"` for the custom scrollbar
+  • `role="dialog"`, `aria-label="Notifications"`
+- Header: sticky top with `var(--surf)` background, "Notifications" title (13px bold var(--t1)) + a "Mark all read" `.btn.btn-ghost.btn-sm` button (disabled when no items or no unread).
+- Notification rows: each row is a flex container with:
+  • Left: 28×28 `.li-icon` circle with tone-mapped background (`var(--accd)/--grnd/--ambd/--teald/--redd`) and foreground (`var(--acc)/--grn/--amb/--teal/--red`). Icon chosen by type via `TYPE_ICON` map (forecast→"forecast", vault→"vault", spending→"warn", peak→"peak", break→"calendar").
+  • Middle: title (12.5px bold var(--t1)) + body (11px var(--t3), 1.4 line-height) + timestamp (10px var(--t4), `.flux-mono`, formatted as "just now"/"2m ago"/"1h ago"/"3d ago"/"1w ago").
+  • Unread rows: `border-left: 2px solid var(--acc)` + `background: var(--accd)`; read rows: `border-left: 2px solid transparent` + transparent background.
+- Footer: full-width `.btn.btn-ghost` "View all in dashboard" — calls `setView("dashboard")` via the `useFlux` store and closes the dropdown.
+- Empty state: "You're all caught up" (centered, var(--t3)).
+- Loading state: "Loading…" (centered, var(--t3)) shown only when `loading && items.length === 0`.
+- "Mark all read": visual-only — adds all current item IDs to the `readIds` Set (so they lose the unread accent + the dot disappears on next render). Does NOT call any API.
+- Fetch behavior: `fetchNotifs` is a `useCallback`. First `useEffect` fires on mount (so the unread dot is correct before the user opens the dropdown). Second `useEffect` fires whenever `open` transitions to `true` (refresh on open).
+- Click-away listener: `useEffect` (active only while `open`) adds `mousedown` listener on `document`; if the click target is outside `ref.current`, closes the dropdown. Also adds `keydown` listener for `Escape`. Cleans up both on unmount / when `open` flips to false.
+- `timeAgo(iso)` helper: handles NaN dates gracefully (returns empty string).
+
+CSS additions (`src/app/globals.css`):
+- `.notif-unread-dot` — 7×7 red dot with `1.5px var(--bg2)` border (so it pops against any theme button background), `position:absolute; top:5px; right:5px`, `pointer-events:none`, `animation: notifPulse 1.8s infinite cubic-bezier(.4,0,.2,1)`.
+- `@keyframes notifPulse` — red box-shadow ring (0→6px) using `rgba(232,85,85,.55)` (matches the existing green `pulse-dot` pattern but in red).
+- `@keyframes notifDropIn` — `from { opacity:0; transform:translateY(-4px) }` → `to { opacity:1; transform:translateY(0) }` (150ms when applied via `animation: notifDropIn .15s ease-out`).
+
+Topbar wiring (`src/components/flux/topbar.tsx`):
+- Added `import { NotificationsDropdown } from "./notifications-dropdown";`.
+- Rendered `<NotificationsDropdown />` between the vault balance pill (`{snap && (...)}` block) and the theme-toggle `<button>`. The dropdown sits inside the existing `.flex.items-center.gap-2` container so it inherits the 8px gap.
+- No state lifted — the dropdown fully manages its own open/close + read state internally.
+
+Style rules honored:
+- Design-system classes only (`.theme-btn`, `.btn.btn-ghost[.btn-sm]`, `.li-icon`, `.flux-scroll`, `.flux-mono`, `.label-sm`, `.badge`-style tone colors via inline `var(--*)`).
+- No Tailwind color utilities — every color is `var(--*)` (surf, surf2, bdr, bdr2, t1, t2, t3, t4, acc, accd, grn, grnd, amb, ambd, teal, teald, red, redd, bg3).
+- Currency in the API uses `₹${Math.round(n).toLocaleString("en-IN")}` to match the existing `insights/route.ts` convention (the API doesn't import the client-side `formatINR` helper).
+- Timestamps in the dropdown use `.flux-mono`.
+- `"use client"` directive at top of `notifications-dropdown.tsx`.
+- Dropdown entrance animation: opacity 0→1 + translateY -4→0 over 150ms (via `@keyframes notifDropIn`).
+- Lint-clean.
+
+Verification:
+- `cd /home/z/my-project && bun run lint` → exit 0, 0 errors, 0 warnings.
+- `bunx tsc --noEmit` → 0 errors in any of the 4 modified/created files (pre-existing errors in `charts.tsx`, `examples/websocket/server.ts`, `skills/*` are unrelated and untouched).
+- Did NOT start dev server (per task instructions).
+
+Stage Summary:
+- The topbar now has a notifications bell between the vault balance pill and the theme toggle.
+- The bell shows a pulsing red unread dot whenever there are unread notifications.
+- Clicking the bell opens a 340px dropdown panel that lists up to 8 notifications (forecast runs, vault deposits, spending alert, peak-day reminder, ideal break window) with tone-mapped icon circles, titles, bodies, and "time ago" timestamps.
+- Unread rows get a 2px accent left border + accent background; clicking "Mark all read" clears them locally.
+- The dropdown closes on outside click, Escape key, or "View all in dashboard" (which also navigates to the dashboard view via `useFlux().setView`).
+- The panel animates in (opacity+translateY) over 150ms and uses the design-system scrollbar.
+- Next opportunities: persist read state across reloads (localStorage); add real-time push when a new forecast run completes (via the existing Socket.IO mini-service); add per-notification "dismiss" action; add a `/api/notifications/read` POST endpoint to truly persist read state in the DB.
+
+---
+Task ID: R5-ROUND
+Agent: orchestrator (main) — cron review round 5
+Task: QA all 8 views, add notifications dropdown, streaming LLM chat, spending trends chart, transaction pagination.
+
+Work Log:
+- Reviewed prior worklog (R4-ROUND confirmed 6 new features: transaction search/filter, theme previews, goals progress, toast polish, FAB pulse, month-over-month).
+- Started dev server + mini-service, ran comprehensive QA via agent-browser across all 8 views: zero console errors, zero page errors.
+- Ran VLM (z-ai vision) review on Dashboard, Spending, Chat — collected specific gaps (no notifications, no pagination, no streaming).
+
+New features added:
+1. **Notifications dropdown** in topbar (`src/components/flux/notifications-dropdown.tsx` + `GET /api/notifications`):
+   - Bell icon button with pulsing red unread dot
+   - 340px dropdown panel with 8 notifications derived from: recent forecast runs, vault deposits, spending alerts (if >65% of income), peak day reminders, break window suggestions
+   - Each notification has a tone-mapped icon circle, title, body, and relative timestamp ("5m ago")
+   - Unread rows get a 2px accent left border
+   - "Mark all read" button + "View all in dashboard" footer link
+   - Closes on outside click + Escape key
+   - Animates in (opacity + translateY, 150ms)
+   - Verified: API returns 8 notifications; dropdown opens with "Mark all read", "View all in dashboard", "Next peak day", "Auto-saved today". VLM rates 8.5/10.
+2. **Streaming LLM chat** (`POST /api/chat/stream` + `chatWithFluxStream()` in `src/lib/llm.ts`):
+   - Server-Sent Events (SSE) format: `data: {"token":"..."}` for each chunk, `data: {"done":true,"content":"..."}` at end
+   - Tries native SDK streaming (`stream: true`), falls back to simulated streaming (word-by-word) if unsupported
+   - Both ChatView and ChatFab updated to consume the stream: fetch + ReadableStream reader + SSE line parsing
+   - Streaming text renders live in the assistant bubble with a blinking cursor (animated accent-colored caret)
+   - Markdown renders incrementally as tokens arrive
+   - Typing dots show before first token arrives, then transition to streaming text
+   - Verified: API returns SSE format with content; chat shows streaming response with markdown. VLM confirms "AI response is rendered with Markdown formatting (bold text, bullet points)".
+3. **6-month spending trends LineChart** on Spending view:
+   - 2-line chart (Income acc + Spending red) with hover tooltips
+   - Labels: ["Oct","Nov","Dec","Jan","Feb","Mar"], last point wired to live snapshot values
+   - 3 stat callouts below: 6-mo avg income, 6-mo avg spending, 6-mo avg savings
+   - Savings rate insight (green if ≥20%, amber otherwise)
+4. **Transaction pagination** on Spending view:
+   - Shows 10 rows per page instead of all 50
+   - Footer: "Showing {start}–{end} of {total} transactions · Total +X/−Y/±Z" on the left
+   - Prev/Next buttons + "Page {current} of {totalPages}" on the right
+   - Resets to page 1 when search query or filter changes
+   - Alternating row colors (even rows get `var(--surf2)` background) on both tables
+
+Styling improvements:
+- Notifications dropdown: `notifDropIn` keyframes (opacity + translateY), `notifPulse` for the unread dot
+- Streaming cursor: blinking accent-colored caret via `fluxTyping` animation
+- Alternating table row colors for readability
+
+Verification:
+- `bun run lint` → clean (0 errors, 0 warnings).
+- All 8 views render via agent-browser with zero console/page errors.
+- Notifications API verified: returns 8 notifications (vault, spending, peak, break, forecast types).
+- Notifications dropdown verified: opens on bell click, shows content, closes on Escape.
+- Streaming chat API verified: returns SSE format with `{"done":true,"content":"..."}`.
+- Streaming chat UI verified: response renders with markdown (bold, bullets) + blinking cursor.
+- Spending trends chart + pagination verified: LineChart renders, Prev/Next buttons present.
+- VLM rates notifications dropdown 8.5/10.
+- VLM confirms chat response renders with markdown.
+- Zero errors in dev log (excluding expected LLM 429 rate-limits).
+
+Stage Summary:
+- Flux now has 4 more features: notifications dropdown, streaming LLM chat, 6-month spending trends, transaction pagination.
+- All lint-clean, all views error-free, all features verified.
+- Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
+- Next opportunities: add a command palette (Cmd+K); add data export to JSON; add a "share scenario" URL for the What-If Simulator; add a spending calendar heatmap; add multi-currency support; add a goal-setting wizard.

@@ -600,3 +600,30 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius
   .sr:hover { background: var(--surf2); }
 }
 
+/* ─── Notifications dropdown (added R5-1) ─────────────────── */
+/* Unread indicator dot on the topbar bell — red with a soft pulse,
+   sits at the top-right corner of the 32px button. */
+.notif-unread-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  border: 1.5px solid var(--bg2);
+  pointer-events: none;
+  animation: notifPulse 1.8s infinite cubic-bezier(.4,0,.2,1);
+}
+@keyframes notifPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(232,85,85,.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(232,85,85,0); }
+  100% { box-shadow: 0 0 0 0 rgba(232,85,85,0); }
+}
+
+/* Dropdown entrance: fade in + slide down 4px over 150ms. */
+@keyframes notifDropIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+

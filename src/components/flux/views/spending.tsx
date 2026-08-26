@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFlux, formatINR, type Category, type Tx } from "@/store/flux-store";
 import { LineChart, ProgressRing } from "@/components/flux/charts";
 import { Icon } from "@/components/flux/icon";
@@ -12,6 +12,14 @@ const DAILY_SERIES = [
   1900, 2700, 2100, 1400, 900, 1200, 1600, 1300,
 ];
 const DAILY_LABELS = DAILY_SERIES.map((_, i) => String(i + 1));
+
+/* ── 6-month trend demo series (last 5 months + current snapshot) ── */
+const TREND_LABELS = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+const TREND_INCOME_BASE = [42000, 58000, 46000, 49000, 44000];
+const TREND_SPENDING_BASE = [30000, 38000, 34000, 32000, 28000];
+
+/* ── Transactions pagination ── */
+const TX_PAGE_SIZE = 10;
 
 /* ── Tone → progress-bar fill class / color ── */
 function toneFill(tone: string): { className?: string; color?: string } {
@@ -149,7 +157,7 @@ export function SpendingView() {
 
     return {
       allCategories,
-      rows: filtered.slice(0, 50),
+      rows: filtered,
       shownCount: filtered.length,
       totalCount: transactions.length,
       income,
@@ -157,6 +165,33 @@ export function SpendingView() {
       net,
     };
   }, [transactions, txSearch, txCategory, txFlow]);
+
+  /* Pagination: 10 rows per page; reset to page 1 when filters change */
+  const [txPage, setTxPage] = useState(1);
+  useEffect(() => {
+    setTxPage(1);
+  }, [txSearch, txCategory, txFlow]);
+
+  const txPagination = useMemo(() => {
+    const total = txView.rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / TX_PAGE_SIZE));
+    const current = Math.min(Math.max(1, txPage), totalPages);
+    const start = total === 0 ? 0 : (current - 1) * TX_PAGE_SIZE + 1;
+    const end = Math.min(total, current * TX_PAGE_SIZE);
+    const pageRows = txView.rows.slice(start - 1, end);
+    return { total, totalPages, current, start, end, pageRows };
+  }, [txView.rows, txPage]);
+
+  /* 6-month spending trend (income vs spending, ending at current snapshot) */
+  const trend = useMemo(() => {
+    const income = [...TREND_INCOME_BASE, snapshot?.income ?? 48200];
+    const spending = [...TREND_SPENDING_BASE, snapshot?.spending ?? 31400];
+    const avgIncome = income.reduce((s, v) => s + v, 0) / income.length;
+    const avgSpending = spending.reduce((s, v) => s + v, 0) / spending.length;
+    const avgSavings = avgIncome - avgSpending;
+    const savingsRate = avgIncome > 0 ? (avgSavings / avgIncome) * 100 : 0;
+    return { income, spending, avgIncome, avgSpending, avgSavings, savingsRate };
+  }, [snapshot?.income, snapshot?.spending]);
 
   async function submitExpense(e: React.FormEvent) {
     e.preventDefault();
@@ -369,12 +404,12 @@ export function SpendingView() {
             </tr>
           </thead>
           <tbody>
-            {sortedCats.map((c: Category) => {
+            {sortedCats.map((c: Category, i: number) => {
               const usagePct = c.limit > 0 ? Math.min(100, (c.spent / c.limit) * 100) : 0;
               const fill = toneFill(c.tone);
               const status = statusFor(c.spent, c.limit);
               return (
-                <tr key={c.id}>
+                <tr key={c.id} style={i % 2 === 0 ? { background: "var(--surf2)" } : undefined}>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span
@@ -451,6 +486,54 @@ export function SpendingView() {
             },
           ]}
         />
+      </div>
+
+      {/* ─── 6-month spending trend ─── */}
+      <div className="card mb2">
+        <div className="card-h">
+          <div>
+            <div className="card-t">6-month spending trend</div>
+            <div className="card-s">Income vs spending over the last 6 months</div>
+          </div>
+          <div style={{ display: "flex", gap: 12, fontSize: 11, alignItems: "center" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--t3)" }}>
+              <span style={{ width: 12, height: 2, background: "var(--acc)", borderRadius: 2, display: "inline-block" }} />
+              <span>Income</span>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--t3)" }}>
+              <span style={{ width: 12, height: 2, background: "var(--red)", borderRadius: 2, display: "inline-block" }} />
+              <span>Spending</span>
+            </span>
+          </div>
+        </div>
+
+        <LineChart
+          height={180}
+          labels={TREND_LABELS}
+          formatVal={(n) => formatINR(n, { compact: true })}
+          lines={[
+            { data: trend.income, color: "acc", label: "Income" },
+            { data: trend.spending, color: "red", label: "Spending" },
+          ]}
+        />
+
+        {/* 3-col stat callouts */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 16 }}>
+          <StatTile label="6-mo avg income"   value={formatINR(trend.avgIncome, { compact: true })}   color="var(--acc)" />
+          <StatTile label="6-mo avg spending" value={formatINR(trend.avgSpending, { compact: true })} color="var(--red)" />
+          <StatTile label="6-mo avg savings"  value={formatINR(trend.avgSavings, { compact: true })}  color="var(--grn)" />
+        </div>
+
+        {/* Savings-rate insight */}
+        <div className={`ins ${trend.savingsRate >= 20 ? "ins-grn" : "ins-amb"}`} style={{ margin: "14px 0 0" }}>
+          <div className="ins-h">
+            Your savings rate over 6 months is {Math.round(trend.savingsRate)}%
+          </div>
+          <div className="ins-b">
+            Averaging <strong>{formatINR(trend.avgSavings, { compact: true })}</strong> saved per month
+            ({formatINR(trend.avgIncome, { compact: true })} income − {formatINR(trend.avgSpending, { compact: true })} spending).
+          </div>
+        </div>
       </div>
 
       {/* ─── All transactions ─── */}
@@ -557,8 +640,8 @@ export function SpendingView() {
             </tr>
           </thead>
           <tbody>
-            {txView.rows.map((t: Tx) => (
-              <tr key={t.id}>
+            {txPagination.pageRows.map((t: Tx, i: number) => (
+              <tr key={t.id} style={i % 2 === 0 ? { background: "var(--surf2)" } : undefined}>
                 <td className="td-m">{t.label}</td>
                 <td>{formatTxDate(t.date)}</td>
                 <td>
@@ -572,7 +655,7 @@ export function SpendingView() {
                 </td>
               </tr>
             ))}
-            {txView.rows.length === 0 && (
+            {txPagination.total === 0 && (
               <tr>
                 <td
                   colSpan={4}
@@ -585,7 +668,7 @@ export function SpendingView() {
           </tbody>
         </table>
 
-        {/* Summary footer */}
+        {/* Pagination + totals footer */}
         <div
           className="flux-surface-2"
           style={{
@@ -595,44 +678,80 @@ export function SpendingView() {
             color: "var(--t3)",
             display: "flex",
             flexWrap: "wrap",
-            gap: "3px 8px",
+            gap: "8px 16px",
             alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          <span>
-            Showing{" "}
-            <span className="flux-mono" style={{ color: "var(--t1)", fontWeight: 600 }}>
-              {txView.shownCount}
-            </span>{" "}
-            of{" "}
-            <span className="flux-mono" style={{ color: "var(--t1)", fontWeight: 600 }}>
-              {txView.totalCount}
-            </span>{" "}
-            transactions
-          </span>
-          <span style={{ color: "var(--t4)" }}>·</span>
-          <span>
-            Total:{" "}
-            <span className="flux-mono" style={{ color: "var(--grn)", fontWeight: 600 }}>
-              +{formatINR(txView.income, { compact: true })}
+          {/* Left: showing-range + totals */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 8px", alignItems: "center" }}>
+            <span>
+              Showing{" "}
+              <span className="flux-mono" style={{ color: "var(--t1)", fontWeight: 600 }}>
+                {txPagination.start}–{txPagination.end}
+              </span>{" "}
+              of{" "}
+              <span className="flux-mono" style={{ color: "var(--t1)", fontWeight: 600 }}>
+                {txPagination.total}
+              </span>{" "}
+              transactions
             </span>
-            <span style={{ margin: "0 4px" }}>(income) /</span>
-            <span className="flux-mono" style={{ color: "var(--red)", fontWeight: 600 }}>
-              −{formatINR(txView.expenses, { compact: true })}
+            <span style={{ color: "var(--t4)" }}>·</span>
+            <span>
+              Total:{" "}
+              <span className="flux-mono" style={{ color: "var(--grn)", fontWeight: 600 }}>
+                +{formatINR(txView.income, { compact: true })}
+              </span>
+              <span style={{ margin: "0 4px" }}>(income) /</span>
+              <span className="flux-mono" style={{ color: "var(--red)", fontWeight: 600 }}>
+                −{formatINR(txView.expenses, { compact: true })}
+              </span>
+              <span style={{ margin: "0 4px" }}>(expenses) /</span>
+              <span
+                className="flux-mono"
+                style={{
+                  color: txView.net >= 0 ? "var(--grn)" : "var(--red)",
+                  fontWeight: 600,
+                }}
+              >
+                {txView.net >= 0 ? "+" : "−"}
+                {formatINR(Math.abs(txView.net), { compact: true })}
+              </span>
+              <span style={{ marginLeft: 4 }}>(net)</span>
             </span>
-            <span style={{ margin: "0 4px" }}>(expenses) /</span>
+          </div>
+
+          {/* Right: prev / page indicator / next */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setTxPage((p) => Math.max(1, p - 1))}
+              disabled={txPagination.current <= 1}
+              style={txPagination.current <= 1 ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
+            >
+              <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}>
+                <Icon name="chevron" size={12} />
+              </span>{" "}
+              Prev
+            </button>
             <span
               className="flux-mono"
-              style={{
-                color: txView.net >= 0 ? "var(--grn)" : "var(--red)",
-                fontWeight: 600,
-              }}
+              style={{ fontSize: 11.5, color: "var(--t2)", fontWeight: 600, whiteSpace: "nowrap" }}
             >
-              {txView.net >= 0 ? "+" : "−"}
-              {formatINR(Math.abs(txView.net), { compact: true })}
+              Page {txPagination.current} of {txPagination.totalPages}
             </span>
-            <span style={{ marginLeft: 4 }}>(net)</span>
-          </span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setTxPage((p) => Math.min(txPagination.totalPages, p + 1))}
+              disabled={txPagination.current >= txPagination.totalPages}
+              style={txPagination.current >= txPagination.totalPages ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
+            >
+              Next{" "}
+              <Icon name="chevron" size={12} />
+            </button>
+          </div>
         </div>
       </div>
     </>
