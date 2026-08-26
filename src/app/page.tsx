@@ -55,13 +55,15 @@ export default function Home() {
                 </div>
               </div>
               <div className="page-body">
-                {view === "dashboard" && <DashboardView />}
-                {view === "spending" && <SpendingView />}
-                {view === "forecast" && <ForecastView />}
-                {view === "break" && <BreakView />}
-                {view === "vault" && <VaultView />}
-                {view === "profile" && <ProfileView />}
-                {view === "chat" && <ChatView />}
+                <div key={view} className="view-fade-in">
+                  {view === "dashboard" && <DashboardView />}
+                  {view === "spending" && <SpendingView />}
+                  {view === "forecast" && <ForecastView />}
+                  {view === "break" && <BreakView />}
+                  {view === "vault" && <VaultView />}
+                  {view === "profile" && <ProfileView />}
+                  {view === "chat" && <ChatView />}
+                </div>
               </div>
             </>
           )}

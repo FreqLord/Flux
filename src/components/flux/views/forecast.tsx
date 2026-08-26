@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useFlux,
   formatINR,
@@ -9,6 +9,7 @@ import {
 } from "@/store/flux-store";
 import { LineChart } from "@/components/flux/charts";
 import { Icon } from "@/components/flux/icon";
+import { useToast } from "@/hooks/use-toast";
 
 /* ─────────────────────────────────────────────────────────────
    Normalized forecast shape used by this view's renderers.
@@ -64,10 +65,21 @@ export function ForecastView() {
   const heatmapDays = useFlux((s) => s.heatmapDays);
   const lastForecast = useFlux((s) => s.lastForecast);
   const load = useFlux((s) => s.load);
+  const { toast } = useToast();
 
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [liveResult, setLiveResult] = useState<{ run: any; result: any } | null>(null);
+
+  /* CSV upload state */
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /* Run history state */
+  const [history, setHistory] = useState<(ForecastRunDb & { days?: ForecastDayDb[] })[]>([]);
+  const [historyView, setHistoryView] = useState<(ForecastRunDb & { days?: ForecastDayDb[] }) | null>(null);
 
   /* counts by tier — derived from heatmapDays */
   const counts = useMemo(() => {
@@ -78,9 +90,10 @@ export function ForecastView() {
     return { peak, good, slow, rest, total: heatmapDays.length || 31 };
   }, [heatmapDays]);
 
-  /* which forecast are we rendering right now? live result takes priority,
-     then the persisted lastForecast from the store. */
+  /* which forecast are we rendering right now? history override takes priority,
+     then the live POST result, then the persisted lastForecast from the store. */
   const renderFc: RenderForecast | null = useMemo(() => {
+    if (historyView) return toRenderFromDb(historyView);
     if (liveResult?.result) {
       const r = liveResult.result;
       return {
@@ -108,6 +121,24 @@ export function ForecastView() {
     }
     if (lastForecast) return toRenderFromDb(lastForecast);
     return null;
+  }, [liveResult, lastForecast, historyView]);
+
+  /* load run history on mount + whenever a new run lands (liveResult or
+     lastForecast change). The fetch is cheap and the slight double-trigger
+     after load() is harmless — the second pass reflects the new row. */
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/forecast")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: (ForecastRunDb & { days?: ForecastDayDb[] })[]) => {
+        if (!cancelled) setHistory(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [liveResult, lastForecast]);
 
   /* predicted month total (use forecast if available, else the static demo value) */
@@ -128,7 +159,7 @@ export function ForecastView() {
     return "₹54k–₹70k";
   }, [renderFc]);
 
-  /* trigger the ML engine */
+  /* trigger the ML engine (synthetic history) */
   async function runForecastApi() {
     setRunning(true);
     setRunError(null);
@@ -144,12 +175,42 @@ export function ForecastView() {
       }
       const json = await res.json();
       setLiveResult(json);
+      setHistoryView(null);
       await load(); // refresh store so lastForecast + snapshot vault reflect new run
     } catch (e: any) {
       setRunError(e?.message || "Forecast failed");
     } finally {
       setRunning(false);
     }
+  }
+
+  /* upload CSV → /api/upload-csv → live forecast from user data */
+  async function handleFile(file: File) {
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload-csv", { method: "POST", body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `Upload failed (${res.status})`);
+      }
+      const json = await res.json();
+      setLiveResult(json);
+      setHistoryView(null);
+      await load();
+      toast({ title: "Forecast generated from your CSV" });
+    } catch (e: any) {
+      setUploadError(e?.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function openFilePicker() {
+    fileInputRef.current?.click();
   }
 
   /* weekday header row + heatmap cells */
@@ -203,33 +264,39 @@ export function ForecastView() {
           </button>
         </div>
 
-        {/* metrics row inside the engine panel */}
+        {/* kpi-mini tiles above the chart */}
         {renderFc ? (
           <div className="g4" style={{ marginBottom: 14 }}>
-            <MetricMini
-              label="Projected income"
-              value={formatINR(renderFc.projectedIncome, { compact: true })}
-              tone="acc"
-              sub={`${renderFc.horizon}-day horizon · Run #${renderFc.runNumber}`}
-            />
-            <MetricMini
-              label="Essential costs"
-              value={formatINR(renderFc.essentialExpenses, { compact: true })}
-              tone="t2"
-              sub={`Coverage ${renderFc.coverageRatio.toFixed(2)}×`}
-            />
-            <MetricMini
-              label={renderFc.surplus >= 0 ? "Surplus" : "Deficit"}
-              value={formatINR(renderFc.surplus, { compact: true })}
-              tone={renderFc.surplus >= 0 ? "grn" : "red"}
-              sub={`Vault ${renderFc.vaultAction === "deposit" ? "+" : "−"}${formatINR(renderFc.vaultDelta, { compact: true })}`}
-            />
-            <MetricMini
-              label="MAPE (base → hybrid)"
-              value={`${renderFc.baseMape.toFixed(1)}% → ${renderFc.hybridMape.toFixed(1)}%`}
-              tone="amb"
-              sub={`−${renderFc.improvementPct.toFixed(1)} pts improvement`}
-            />
+            <div className="kpi-mini">
+              <div className="kpi-mini-lbl">Projected income</div>
+              <div className="kpi-mini-val" style={{ color: "var(--acc)" }}>
+                {formatINR(renderFc.projectedIncome, { compact: true })}
+              </div>
+            </div>
+            <div className="kpi-mini">
+              <div className="kpi-mini-lbl">Essential costs</div>
+              <div className="kpi-mini-val">
+                {formatINR(renderFc.essentialExpenses, { compact: true })}
+              </div>
+            </div>
+            <div className="kpi-mini">
+              <div className="kpi-mini-lbl">{renderFc.surplus >= 0 ? "Surplus" : "Deficit"}</div>
+              <div
+                className="kpi-mini-val"
+                style={{ color: renderFc.surplus >= 0 ? "var(--grn)" : "var(--red)" }}
+              >
+                {formatINR(renderFc.surplus, { compact: true })}
+              </div>
+            </div>
+            <div className="kpi-mini">
+              <div className="kpi-mini-lbl">Coverage ratio</div>
+              <div
+                className="kpi-mini-val"
+                style={{ color: renderFc.coverageRatio >= 1 ? "var(--grn)" : "var(--red)" }}
+              >
+                {renderFc.coverageRatio.toFixed(2)}×
+              </div>
+            </div>
           </div>
         ) : (
           <div className="ins ins-amb" style={{ marginBottom: 14 }}>
@@ -253,23 +320,37 @@ export function ForecastView() {
                 flexWrap: "wrap",
               }}
             >
-              <LegendDot color="var(--acc)" label="Hybrid (finalY)" />
-              <LegendDot color="var(--t2)" dashed label="Base yhat" />
+              <LegendDot color="var(--acc)" label="Hybrid forecast" />
+              <LegendDot color="var(--t2)" dashed label="Base model" />
               <LegendDot color="var(--accm)" band label="80% CI band" />
               <span style={{ marginLeft: "auto", fontSize: 10.5, color: "var(--t3)" }}>
-                {renderFc.future.length} future days · source: {renderFc.source}
+                {renderFc.future.length} future days · source: {renderFc.source} · MAPE{" "}
+                {renderFc.baseMape.toFixed(1)}% → {renderFc.hybridMape.toFixed(1)}%
               </span>
             </div>
             <LineChart
               labels={fcLabels}
               lines={[
-                { data: fcFinalY, color: "acc", label: "Hybrid (finalY)" },
-                { data: fcBaseYhat, color: "t1", dashed: true, label: "Base yhat" },
+                { data: fcFinalY, color: "acc", label: "Hybrid forecast" },
+                { data: fcBaseYhat, color: "t1", dashed: true, label: "Base model" },
               ]}
               band={{ low: fcLow, high: fcHigh }}
               height={200}
               formatVal={compact}
             />
+          </div>
+        ) : null}
+
+        {/* viewing-history banner */}
+        {historyView && renderFc ? (
+          <div className="ins ins-acc" style={{ marginTop: 10 }}>
+            <div className="ins-h">
+              Viewing Run #{renderFc.runNumber} · loaded from history
+            </div>
+            <div className="ins-b">
+              This run's days are shown in the chart above. Click "Clear view" in the run history
+              panel below to return to your latest forecast.
+            </div>
           </div>
         ) : null}
 
@@ -295,6 +376,200 @@ export function ForecastView() {
           <div className="ins ins-red" style={{ marginTop: 10 }}>
             <div className="ins-h">Run failed</div>
             <div className="ins-b">{runError}</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── CSV UPLOAD CARD ───────────────────────────────────── */}
+      <div className="card">
+        <div className="card-h">
+          <div>
+            <div className="card-t" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Icon name="download" size={15} className="flux-acc" />
+              <span>Upload your own data</span>
+            </div>
+            <div className="card-s">Run the hybrid forecast on your own monthly totals</div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={downloadSampleCsv}
+            disabled={uploading}
+          >
+            <Icon name="download" size={13} />
+            Download sample CSV
+          </button>
+        </div>
+
+        <div
+          className={`dropzone${dragging ? " dragging" : ""}`}
+          onClick={openFilePicker}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) handleFile(f);
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              e.target.value = "";
+            }}
+          />
+          {uploading ? (
+            <>
+              <div
+                className="flux-acc"
+                style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}
+              >
+                <Icon name="refresh" size={26} />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)" }}>
+                Uploading &amp; forecasting…
+              </div>
+              <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 4 }}>
+                Running the hybrid ML engine on your CSV
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                className="flux-acc"
+                style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}
+              >
+                <Icon name="download" size={26} />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)" }}>
+                Drop your CSV here or click to browse
+              </div>
+              <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 4 }}>
+                Columns: Net_Income, Fuel_or_Expense, Loan_Repayment, Emergency_Expense · min 30 rows
+              </div>
+            </>
+          )}
+        </div>
+
+        {uploadError && (
+          <div className="ins ins-red" style={{ marginTop: 10 }}>
+            <div className="ins-h">Upload failed</div>
+            <div className="ins-b">{uploadError}</div>
+          </div>
+        )}
+
+        <div className="ins ins-amb" style={{ marginTop: 10 }}>
+          <div className="ins-b">
+            Your CSV columns should be monthly totals. The engine divides by 30 internally for daily
+            forecasting (matching the original Python pipeline).
+          </div>
+        </div>
+      </div>
+
+      {/* ── FORECAST RUN HISTORY CARD ────────────────────────── */}
+      <div className="card">
+        <div className="card-h">
+          <div>
+            <div className="card-t" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Icon name="calendar" size={15} className="flux-acc" />
+              <span>Forecast run history</span>
+            </div>
+            <div className="card-s">
+              Last {history.length || 0} runs · click View to load a run into the chart above
+            </div>
+          </div>
+          {historyView ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setHistoryView(null)}
+            >
+              Clear view
+            </button>
+          ) : null}
+        </div>
+
+        {history.length === 0 ? (
+          <div className="ins">
+            <div className="ins-b" style={{ color: "var(--t3)" }}>
+              No forecast runs yet. Run one above.
+            </div>
+          </div>
+        ) : (
+          <div className="flux-scroll" style={{ overflowX: "auto" }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Run #</th>
+                  <th>Date</th>
+                  <th>Source</th>
+                  <th>Projected</th>
+                  <th>MAPE</th>
+                  <th>Vault Δ</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((run) => {
+                  const isCurrent = historyView?.id === run.id;
+                  const mapeColor =
+                    run.hybridMape < 10
+                      ? "var(--grn)"
+                      : run.hybridMape > 20
+                        ? "var(--red)"
+                        : "var(--amb)";
+                  const isDeposit = run.vaultAction === "deposit";
+                  return (
+                    <tr
+                      key={run.id}
+                      className="run-row"
+                      style={isCurrent ? { background: "var(--accd)" } : undefined}
+                    >
+                      <td className="td-m flux-mono">#{run.runNumber}</td>
+                      <td>{fmtRunDate(run.createdAt)}</td>
+                      <td>
+                        <span className={`badge ${run.source === "csv" ? "bl" : "bk"}`}>
+                          {run.source === "csv" ? "csv" : "synthetic"}
+                        </span>
+                      </td>
+                      <td className="td-n">{formatINR(run.projectedIncome, { compact: true })}</td>
+                      <td className="td-n" style={{ color: mapeColor }}>
+                        {run.hybridMape.toFixed(1)}%
+                      </td>
+                      <td
+                        className="td-n"
+                        style={{ color: isDeposit ? "var(--grn)" : "var(--red)" }}
+                      >
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Icon name={isDeposit ? "up" : "down"} size={11} />
+                          {isDeposit ? "+" : "−"}
+                          {formatINR(run.vaultDelta, { compact: true })}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setHistoryView(run)}
+                          disabled={isCurrent}
+                        >
+                          {isCurrent ? "Viewing" : "View"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -551,38 +826,6 @@ export function ForecastView() {
 /* ─────────────────────────────────────────────────────────────
    Small presentational helpers
    ───────────────────────────────────────────────────────────── */
-function MetricMini({
-  label, value, sub, tone,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  tone: "acc" | "grn" | "amb" | "red" | "t2";
-}) {
-  const color =
-    tone === "acc" ? "var(--acc)" :
-    tone === "grn" ? "var(--grn)" :
-    tone === "amb" ? "var(--amb)" :
-    tone === "red" ? "var(--red)" :
-    "var(--t2)";
-  return (
-    <div
-      style={{
-        background: "var(--surf2)",
-        border: "1px solid var(--bdr)",
-        borderRadius: "var(--radius-md)",
-        padding: "12px 13px",
-      }}
-    >
-      <div className="label-sm" style={{ marginBottom: 6 }}>{label}</div>
-      <div className="flux-mono" style={{ fontSize: 18, fontWeight: 600, color, lineHeight: 1.1, letterSpacing: "-.02em" }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 4 }}>{sub}</div>
-    </div>
-  );
-}
-
 function LegendDot({
   color, label, dashed, band,
 }: {
@@ -619,4 +862,51 @@ function fmtMD(iso: string): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${m}/${day}`;
+}
+
+/* format a createdAt timestamp as "MMM D, HH:MM" */
+function fmtRunDate(d: string | Date): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(date.getTime())) return "—";
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const m = months[date.getMonth()];
+  const day = date.getDate();
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${m} ${day}, ${hh}:${mm}`;
+}
+
+/* generate a 90-row sample CSV (monthly totals) and trigger a client-side download */
+function downloadSampleCsv() {
+  const header = "Date,Net_Income,Fuel_or_Expense,Loan_Repayment,Emergency_Expense";
+  const rows: string[] = [header];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dow = d.getDay();
+    // weekly seasonality — weekends earn slightly more
+    const weekly = 1 + 0.22 * Math.sin((2 * Math.PI * dow) / 7) + (dow >= 5 ? 0.18 : -0.06);
+    // slow upward trend across the 90-day window
+    const trend = 1 + (90 - i) * 0.004;
+    // ±18% noise around the base
+    const noise = 1 + (Math.random() - 0.5) * 0.18;
+    const base = 52000; // mid-range monthly income
+    const netIncome = Math.max(35000, Math.min(70000, Math.round(base * weekly * trend * noise)));
+    const fuel = 4000 + Math.round(Math.random() * 1000); // 4000-5000
+    const loan = 3000;
+    const emergency = Math.random() < 0.12 ? Math.round(800 + Math.random() * 1400) : 0;
+    rows.push(`${d.toISOString().slice(0, 10)},${netIncome},${fuel},${loan},${emergency}`);
+  }
+  const csv = rows.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "flux-sample-income.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

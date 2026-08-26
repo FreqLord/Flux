@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useFlux, formatINR, type ViewKey } from "@/store/flux-store";
 import { BarChart, Donut, Sparkline } from "@/components/flux/charts";
+import { CountUp } from "@/components/flux/markdown";
 import { Icon } from "@/components/flux/icon";
 
 /* ── Static historical series used by the cash-picture card ── */
@@ -14,6 +15,9 @@ const HIST_LABELS = ["Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const SPARK_INCOME = [38000, 42000, 36000, 44000, 41000, 46000, 43000, 48200];
 const SPARK_SPEND = [28000, 33000, 31000, 35000, 29000, 32000, 30000, 31400];
 const SPARK_VAULT = [9200, 9800, 10400, 10900, 11200, 11500, 11800, 12100];
+
+/* ── Weekly predicted-income trend for the "This week" card ── */
+const WEEK_INCOME_TREND = [22, 25, 28, 24, 26, 27, 28];
 
 /* ── Tiny helpers ── */
 function mean(xs: number[]) {
@@ -125,10 +129,20 @@ export function DashboardView() {
   const vaultBalance = snap?.vaultBalance ?? 12100;
   const incomeTarget = profile?.incomeTarget ?? 67000;
   const vaultGoal = profile?.vaultGoal ?? 30000;
+  const daysPassed = snap?.daysPassed ?? 14;
+  const daysInMonth = snap?.daysInMonth ?? 30;
+  const baselineNeed = snap?.baselineNeed ?? 30000;
 
   const incomePct = Math.min(100, Math.round((income / incomeTarget) * 100));
   const vaultPct = Math.min(100, Math.round((vaultBalance / vaultGoal) * 100));
   const spendingPct = Math.round((spending / income) * 100);
+
+  /* ── KPI mini-tile derived values (safe against div-by-zero) ── */
+  const avgDailyIncome = income / Math.max(1, daysPassed);
+  const remainingDays = Math.max(1, daysInMonth - daysPassed);
+  const safeDailySpend = (income - spending) / remainingDays;
+  const savingsRate = ((income - spending) / Math.max(1, income)) * 100;
+  const vaultCoverage = (vaultBalance / Math.max(1, baselineNeed)) * 100;
 
   const avgIncome = mean(HIST_INCOME);
   const avgSpend = mean(HIST_SPEND);
@@ -153,7 +167,12 @@ export function DashboardView() {
         {/* Monthly Income */}
         <div className="metric-card">
           <div className="metric-lbl">Monthly Income</div>
-          <div className="metric-val flux-mono">{formatINR(income)}</div>
+          <CountUp
+            value={income}
+            format={(n) => formatINR(n)}
+            className="metric-val flux-mono"
+            style={{ display: "block" }}
+          />
           <div className="metric-d dp" style={{ marginBottom: 10 }}>Up 12% vs February</div>
           <div className="prog" style={{ marginBottom: 4 }}>
             <div className="pf pf-acc" style={{ width: `${incomePct}%` }} />
@@ -170,7 +189,12 @@ export function DashboardView() {
         {/* Monthly Spending */}
         <div className="metric-card">
           <div className="metric-lbl">Monthly Spending</div>
-          <div className="metric-val flux-mono" style={{ color: "var(--red)" }}>{formatINR(spending)}</div>
+          <CountUp
+            value={spending}
+            format={(n) => formatINR(n)}
+            className="metric-val flux-mono"
+            style={{ display: "block", color: "var(--red)" }}
+          />
           <div className="metric-d dn" style={{ marginBottom: 9 }}>Up 4% vs February</div>
           <div className="zone-bar" style={{ marginBottom: 5 }}>
             <div className="zs zs-safe" />
@@ -188,9 +212,12 @@ export function DashboardView() {
         {/* Financial Runway */}
         <div className="runway-card">
           <div className="metric-lbl" style={{ color: "rgba(255,255,255,.75)" }}>Financial Runway</div>
-          <div
+          <CountUp
+            value={2.6}
+            format={(n) => `${n.toFixed(1)} mo`}
             className="flux-mono"
             style={{
+              display: "block",
               fontSize: 32,
               fontWeight: 600,
               color: "#fff",
@@ -200,9 +227,7 @@ export function DashboardView() {
               position: "relative",
               zIndex: 1,
             }}
-          >
-            2.6 months
-          </div>
+          />
           <div
             className="metric-d"
             style={{ color: "rgba(255,255,255,.75)", marginBottom: 10, position: "relative", zIndex: 1 }}
@@ -233,7 +258,12 @@ export function DashboardView() {
         {/* Safety Vault */}
         <div className="metric-card">
           <div className="metric-lbl">Safety Vault</div>
-          <div className="metric-val flux-mono" style={{ color: "var(--teal)" }}>{formatINR(vaultBalance)}</div>
+          <CountUp
+            value={vaultBalance}
+            format={(n) => formatINR(n)}
+            className="metric-val flux-mono"
+            style={{ display: "block", color: "var(--teal)" }}
+          />
           <div className="metric-d dp" style={{ marginBottom: 10 }}>Auto-saving is running normally</div>
           <div className="prog" style={{ marginBottom: 4 }}>
             <div className="pf pf-teal" style={{ width: `${vaultPct}%` }} />
@@ -245,6 +275,26 @@ export function DashboardView() {
           <div style={{ marginTop: 10 }}>
             <Sparkline data={SPARK_VAULT} color="teal" height={34} />
           </div>
+        </div>
+      </div>
+
+      {/* ── KPI MINI-TILES ROW ── */}
+      <div className="g4 mb2">
+        <div className="kpi-mini">
+          <div className="kpi-mini-lbl">Avg daily income</div>
+          <div className="kpi-mini-val">{formatINR(avgDailyIncome, { compact: true })}</div>
+        </div>
+        <div className="kpi-mini">
+          <div className="kpi-mini-lbl">Safe daily spend</div>
+          <div className="kpi-mini-val" style={{ color: "var(--amb)" }}>{formatINR(Math.max(0, safeDailySpend), { compact: true })}</div>
+        </div>
+        <div className="kpi-mini">
+          <div className="kpi-mini-lbl">Savings rate</div>
+          <div className="kpi-mini-val" style={{ color: "var(--grn)" }}>{savingsRate.toFixed(0)}%</div>
+        </div>
+        <div className="kpi-mini">
+          <div className="kpi-mini-lbl">Vault coverage</div>
+          <div className="kpi-mini-val" style={{ color: "var(--teal)" }}>{vaultCoverage.toFixed(0)}%</div>
         </div>
       </div>
 
@@ -322,7 +372,18 @@ export function DashboardView() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               <Row label="Predicted income" value="₹22k - ₹28k" mono />
-              <Row label="Today's outlook" value={<span className="badge bg">High probability</span>} />
+              <div style={{ marginTop: -2, marginBottom: -2 }}>
+                <Sparkline data={WEEK_INCOME_TREND} color="acc" height={24} />
+              </div>
+              <Row
+                label="Today's outlook"
+                value={
+                  <span className="badge bg">
+                    <span className="dot dot-live" />
+                    &nbsp;High probability
+                  </span>
+                }
+              />
               <Row label="Next peak day" value="Thu, Mar 19" />
               <Row label="Safe daily spend" value="₹2,200" mono />
               <Row label="Auto-saved today" value="₹2,400" mono valueColor="var(--teal)" />
@@ -333,19 +394,15 @@ export function DashboardView() {
           <div className="card card-sm">
             <div className="card-t" style={{ marginBottom: 11 }}>AI Insights</div>
             {insightsLoading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-                {[0, 1, 2].map((i) => (
+              <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+                {[0, 1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    style={{
-                      height: 56,
-                      borderRadius: "var(--radius-md)",
-                      background: "var(--surf2)",
-                      border: "1px solid var(--bdr)",
-                      animation: "pulse 1.4s ease-in-out infinite",
-                      opacity: 0.5,
-                    }}
-                  />
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                  >
+                    <div className="skeleton" style={{ width: "60%", height: 8 }} />
+                    <div className="skeleton" style={{ width: "90%", height: 8 }} />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -405,8 +462,17 @@ export function DashboardView() {
             <tbody>
               {recentTx.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: "center", padding: 28, color: "var(--t3)" }}>
-                    No transactions yet
+                  <td
+                    colSpan={4}
+                    style={{
+                      textAlign: "center",
+                      padding: 28,
+                      color: "var(--t3)",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => setView("spending")}
+                  >
+                    No transactions yet · Add one in Spending
                   </td>
                 </tr>
               ) : (
@@ -494,6 +560,7 @@ export function DashboardView() {
                 <button
                   key={q.view}
                   type="button"
+                  className="quick-link"
                   onClick={() => setView(q.view)}
                   style={{
                     display: "flex",
@@ -523,7 +590,7 @@ export function DashboardView() {
                     <div style={{ fontSize: 12.5, fontWeight: 600 }}>{q.title}</div>
                     <div style={{ fontSize: 10.5, color: "var(--t3)" }}>{q.sub}</div>
                   </div>
-                  <span style={{ fontSize: 12, color: "var(--t3)" }}>→</span>
+                  <span className="quick-arrow" style={{ fontSize: 12, color: "var(--t3)" }}>→</span>
                 </button>
               ))}
             </div>

@@ -258,3 +258,171 @@ Stage Summary:
 - Mini-service starts with: `cd /home/z/my-project/mini-services/flux-realtime && bun run dev` (port 3003).
 - Known minor: hybrid MAPE can exceed base MAPE on noisy synthetic data (expected — GBM overfits noise); the Python original has the same characteristic. Real CSV data with true seasonality benefits more from residual boosting.
 - Cron job 337548 will continue iterative improvements every 15 min.
+
+---
+Task ID: R3
+Agent: general-purpose
+Task: Polish the Dashboard view with count-up animations, KPI mini-tiles, skeleton loading states, and improved chart tooltips/interactions.
+
+Work Log:
+- Read worklog.md (8a entry describing DashboardView + FINAL status), dashboard.tsx (current view), markdown.tsx (CountUp component signature: `<CountUp value={} format={} className={} style={} />`), charts.tsx (BarChart hover tooltips already present), globals.css (new `.skeleton`, `.kpi-mini`, `.kpi-mini-val`, `.kpi-mini-lbl`, `.view-fade-in` classes), flux-store.ts (snapshot has `daysPassed`, `daysInMonth`, `baselineNeed`), icon.tsx.
+- Modified `/home/z/my-project/src/components/flux/views/dashboard.tsx`:
+  • Imported `CountUp` from `@/components/flux/markdown`.
+  • Replaced 4 top metric-card values with `<CountUp>` so they animate from 0 on mount: Monthly Income (`formatINR`), Monthly Spending (`formatINR` + red color), Financial Runway (value=2.6, format=`(n)=>`${n.toFixed(1)} mo`` with white styling), Safety Vault (`formatINR` + teal color). Kept `.metric-val flux-mono` classes and `display:"block"` to preserve block layout (CountUp renders a `<span>`).
+  • Added KPI mini-tiles row between top metric cards and middle row — 4 `.kpi-mini` tiles in a `.g4 mb2` grid (auto-collapses on mobile via existing media queries): "Avg daily income" = income/daysPassed (compact INR), "Safe daily spend" = (income-spending)/remainingDays (compact INR, amb color, clamped at 0), "Savings rate" = ((income-spending)/income*100).toFixed(0)+"%" (grn), "Vault coverage" = (vault/baselineNeed*100).toFixed(0)+"%" (teal). All divisions guarded with `Math.max(1, …)`.
+  • Added `WEEK_INCOME_TREND = [22,25,28,24,26,27,28]` const.
+  • Replaced AI Insights loading state (was 3 opaque `pulse`-animated blocks) with 4 skeleton rows using the global `.skeleton` shimmer class: each row = 60%-width 8px line + 90%-width 8px line, 6px gap, 11px row gap.
+  • "This week" card: added tiny `<Sparkline data={WEEK_INCOME_TREND} color="acc" height={24} />` directly under the "Predicted income" Row; added `<span className="dot dot-live" />` + `&nbsp;` inside the "Today's outlook" badge so the live pulse dot sits next to the badge text.
+  • Quick-access buttons: added `className="quick-link"` to each `<button>` and wrapped the `→` arrow in `<span className="quick-arrow">→</span>`. Hover slide handled via CSS.
+  • Recent transactions: updated empty-state row text from "No transactions yet" to "No transactions yet · Add one in Spending" and made the cell clickable (cursor pointer + onClick → setView("spending")) for a quick CTA.
+- Modified `/home/z/my-project/src/app/globals.css`:
+  • Extended existing `.table tbody tr` hover rule to add a 2px transparent left border that animates to `var(--acc)` on hover (with `border-color` added to the transition list).
+  • Appended new `.quick-arrow { display: inline-block; transition: transform .15s ease; }` and `.quick-link:hover .quick-arrow { transform: translateX(3px); }` so the arrow slides 3px to the right when the parent link is hovered.
+  • Both additions are purely additive; no conflicts with existing selectors (verified by visual inspection of the hover-micro-interactions section).
+- Lint: `bun run lint` (project-wide eslint) exits 0 (clean). `bunx eslint src/components/flux/views/dashboard.tsx` exits 0. `bunx tsc --noEmit` reports only pre-existing errors in `examples/websocket/server.ts`, `skills/image-edit/...`, `skills/stock-analysis-skill/...`, and `src/components/flux/charts.tsx` (the charts.tsx `t4`/`bdr2`/`surf` lookup errors were already noted in worklog entry 8a). None of the TS errors are in dashboard.tsx or globals.css.
+- Did NOT start the dev server (per task instructions).
+
+Stage Summary:
+- Dashboard polish complete. Top metric cards now animate values from 0 → target on mount (and whenever the underlying store value changes), a new KPI mini-tile row surfaces daily-averaged operating ratios between the hero metrics and the cash-picture chart, AI Insights show shimmering `.skeleton` rows instead of nothing during fetch, the "This week" card gained a tiny weekly-trend Sparkline + a live pulse dot next to the outlook badge, quick-access arrows slide right on hover, and the recent-transactions table rows have a subtle left-border accent on hover plus a clickable empty-state CTA. All design-system classes used (no Tailwind color utilities), `.flux-mono` for numbers, `formatINR` for currency, "use client" at top, lint clean.
+- Files modified: `/home/z/my-project/src/components/flux/views/dashboard.tsx`, `/home/z/my-project/src/app/globals.css`.
+- Next polish opportunities (not in scope): apply count-up + KPI mini-tile treatment to other views (Spending, Forecast, Vault), add `.view-fade-in` to the view-switch wrapper, and resolve the pre-existing `charts.tsx` theme-color `t4`/`bdr2`/`surf` type gaps.
+
+---
+Task ID: R1
+Agent: general-purpose
+Task: Add a CSV upload UI to the existing Income Forecast view, a Forecast run history panel with the ability to load past runs into the chart, polish the existing ML forecast chart with `.kpi-mini` tiles + interactive hover labels, and ship a client-side sample-CSV generator.
+
+Work Log:
+- Read worklog.md (FINAL entry + 8c entry describing the forecast view + R3 dashboard-polish entry noting the new `.kpi-mini` / `.dropzone` classes and `CountUp` helper), globals.css (confirmed `.dropzone` + `.dropzone.dragging` hover/active styles, `.kpi-mini` / `.kpi-mini-val` / `.kpi-mini-lbl` tile classes, `.badge.bk/bl`, `.run-row` table-row hover, `.flux-scroll`, `.ins.ins-red/ins-amb/ins-acc`, `.btn.btn-secondary/ghost/btn-sm`, `.table`, `.td-m`, `.td-n`), forecast.tsx (current file — engine panel + heatmap + actual-vs-planned chart), upload-csv route.ts (POST multipart form field `file`, returns `{run, result}`, 30-row minimum, persists with `source: "csv"`), forecast route.ts (GET returns last 10 runs with `include: { days }`), charts.tsx (LineChart accepts `lines[].label` and renders hover tooltips already), icon.tsx (verified `download`, `refresh`, `calendar`, `up`, `down`, `brain` are all mapped), flux-store.ts (`ForecastRunDb` + `ForecastDayDb` shape, `useFlux().load()`, `formatINR(n, {compact:true})`), markdown.tsx (`CountUp` exported but not needed here), lib/forecast.ts (`generateSyntheticHistory` uses monthly-total convention × 30 — modelled the sample CSV generator on the same shape).
+- Modified `/home/z/my-project/src/components/flux/views/forecast.tsx` (single "use client" file, single `ForecastView` export). Changes:
+  • Imports: added `useEffect`, `useRef` to the React import; added `import { useToast } from "@/hooks/use-toast"`.
+  • State: added `uploading`, `uploadError`, `dragging`, `fileInputRef` for the CSV dropzone; added `history` (array of `ForecastRunDb & { days? }`) and `historyView` (single run or null) for the run-history panel.
+  • `renderFc` memo priority changed to **historyView → liveResult → lastForecast** so clicking "View" on a past run overrides the live forecast in the chart above.
+  • `useEffect` on `[liveResult, lastForecast]` fetches `GET /api/forecast` (returns last 10 runs with included `days`), populates `history` state; cancelled-safe via a `cancelled` flag in the cleanup. Fires on mount and after every successful run / upload so the new row appears immediately.
+  • `runForecastApi` now also calls `setHistoryView(null)` after success so a freshly-run forecast takes priority over any previously-viewed historical run.
+  • New `handleFile(file)` function: builds `FormData` with field `file`, POSTs to `/api/upload-csv`, on success sets `liveResult` to `{run, result}`, clears `historyView`, calls `load()` to refresh the store (snapshot vault + lastForecast), and fires `toast({ title: "Forecast generated from your CSV" })`. On non-OK response, parses the JSON `error` field and surfaces it via `setUploadError`. `finally` clears the `uploading` state.
+  • New `openFilePicker()` helper forwards to `fileInputRef.current?.click()`.
+  • **Engine panel polish** (section 3 of task): replaced the 4 custom `MetricMini` tiles with 4 `.kpi-mini` tiles in a `.g4` grid above the chart, exactly per spec — Projected income (acc), Essential costs (default t1), Surplus/Deficit (label flips by sign, color grn/red), Coverage ratio (`×` suffix, grn if ≥1 else red). Removed the now-unused `MetricMini` helper function to keep the file lint-clean. Updated LineChart `lines` labels from `"Hybrid (finalY)"`/`"Base yhat"` to `"Hybrid forecast"`/`"Base model"` (and matching `LegendDot` labels) so the new hover tooltips show the clean names. Added MAPE `base → hybrid` to the right-side legend meta line so the improvement info previously shown in the 4th MetricMini tile is still surfaced.
+  • **New "Upload your own data" card** placed immediately below the Hybrid Forecast Engine card (before the metric row). Card header: download icon + title "Upload your own data" + subtitle "Run the hybrid forecast on your own monthly totals" + right-aligned "Download sample CSV" `.btn.btn-secondary.btn-sm` button (disabled while uploading). Body: `.dropzone` div with `dragging` class toggled by `onDragOver`/`onDragLeave`/`onDrop` (calls `e.preventDefault()` and reads `e.dataTransfer.files[0]`); hidden `<input type="file" accept=".csv">` triggered on click via `openFilePicker`; after a file is selected the input's value is reset so the same file can be re-selected. While `uploading` the dropzone swaps its inner content to a centered refresh icon + "Uploading & forecasting…" heading + "Running the hybrid ML engine on your CSV" subtitle. On `uploadError`, an `.ins ins-red` box appears below the dropzone with the API error text. Below the dropzone, an `.ins ins-amb` note carries the verbatim line: "Your CSV columns should be monthly totals. The engine divides by 30 internally for daily forecasting (matching the original Python pipeline)."
+  • **New "Forecast run history" card** placed below the upload card. Header: calendar icon + title + subtitle `"Last N runs · click View to load a run into the chart above"` + (only when `historyView` is set) a `.btn.btn-ghost.btn-sm` "Clear view" button that resets `historyView` to null. Body: if `history.length === 0`, a plain `.ins` empty-state box "No forecast runs yet. Run one above." (per spec — `.ins` without a tone modifier; the universal `border-color: var(--bdr)` rule provides the border). Otherwise a horizontally-scrollable `.flux-scroll` wrapper containing a `.table` with columns: **Run #** (`#NN`, `.td-m.flux-mono`), **Date** (`fmtRunDate(createdAt)` = "MMM D, HH:MM" 24h), **Source** (`.badge.bk` for synthetic, `.badge.bl` for csv), **Projected** (`formatINR(projectedIncome, {compact:true})`, `.td-n`), **MAPE** (`hybridMape.toFixed(1)+"%"`, colored grn if <10, amb if 10-20, red if >20), **Vault Δ** (Icon `up`/`down` + `+`/`−` sign + compact INR, colored grn for deposit / red for withdraw), **Action** (`.btn.btn-secondary.btn-sm` "View" button that calls `setHistoryView(run)`; if the row is the currently-viewed run the button reads "Viewing", is disabled, and the row gets a `var(--accd)` background tint). Clicking View loads that run's persisted `days` into local state and `renderFc` immediately re-renders the ML forecast chart above with the historical run's projection (finalY + baseYhat + 80% CI band). A `.ins.ins-acc` banner appears in the engine panel whenever `historyView` is active, explaining how to return to the latest forecast.
+  • **Sample CSV generator** — new module-level `downloadSampleCsv()` function: builds a 90-row CSV string with header `Date,Net_Income,Fuel_or_Expense,Loan_Repayment,Emergency_Expense`. Each row: ISO date (counting back from today), Net_Income in the 35000–70000 monthly-total range (base 52000 × weekly-sine seasonality × slow upward trend × ±18% noise, clamped to [35000, 70000]), Fuel 4000–5000, Loan 3000, Emergency 0 (88% of rows) or 800–2200 spike (12% of rows). Writes the CSV to a `Blob` of type `text/csv;charset=utf-8`, creates an object URL, programmatically clicks an `<a download="flux-sample-income.csv">` appended to `document.body`, then revokes the URL. Triggered by the "Download sample CSV" button in the upload card header.
+  • New `fmtRunDate(d)` helper: formats an ISO datestring or `Date` as "MMM D, HH:MM" (e.g. "Mar 14, 09:42") for the run-history Date column. Returns "—" if the date is invalid.
+- Style rules honored: design-system classes only (`.card`, `.card-h`, `.card-t`, `.card-s`, `.btn.btn-primary/secondary/ghost/btn-sm`, `.dropzone.dragging`, `.kpi-mini`, `.kpi-mini-lbl`, `.kpi-mini-val`, `.ins.ins-acc/ins-amb/ins-red`, `.badge.bk/bl`, `.table`, `.td-m`, `.td-n`, `.run-row`, `.flux-mono`, `.flux-acc`, `.flux-scroll`, `.g4`, `.mb2`, `.stack`, `.metric-card`, `.metric-lbl`, `.metric-val`, `.metric-d.dp/dn/dz`, `.hcell-0..5`, `.li`, `.li-icon`, `.li-body`, `.li-name`, `.li-meta`, `.li-val`, `.stat-callout`, `.stat-n`, `.stat-l`); inline `var(--*)` color tokens for all theming (no Tailwind color utilities); `formatINR` for every currency value (compact variant for kpi-mini tiles, history table, chart axis, range label); `.flux-mono` on every numeric value; `useToast` from `@/hooks/use-toast` for the success toast; `"use client"` at top.
+
+Verification:
+- `bun run lint` (project-wide eslint) → exit 0, clean.
+- `bunx eslint src/components/flux/views/forecast.tsx` → exit 0, no errors, no warnings.
+- `bunx tsc --noEmit` → only pre-existing errors in `examples/websocket/server.ts`, `skills/image-edit/...`, `skills/stock-analysis-skill/...`, and `src/components/flux/charts.tsx` (the charts.tsx `t4`/`bdr2`/`surf` lookup errors were already noted in worklog entry 8a/R3). ZERO errors in forecast.tsx (confirmed by filtering output with `rg -i "forecast\.tsx"` — no matches).
+- Did NOT start the dev server (per task instructions).
+
+Stage Summary:
+- Forecast view now has: (1) a CSV upload card with drag-drop + click-to-browse `.dropzone`, hidden file input, "Uploading & forecasting…" state, `.ins ins-red` error surfacing, "Download sample CSV" button that generates a 90-row monthly-totals CSV client-side and triggers a Blob download, plus the required amber note about the engine's divide-by-30 daily conversion; (2) a Forecast run history card that fetches the last 10 runs from `GET /api/forecast` and renders them in a `.table` with run #, "MMM D, HH:MM" date, source badge, compact projected INR, color-coded MAPE, signed color-coded Vault Δ with action icon, and a "View" button that loads the historical run's `days` into the engine panel's chart above (with a "Clear view" reset and a contextual `.ins ins-acc` banner); (3) engine-panel polish: 4 `.kpi-mini` tiles (Projected income / Essential costs / Surplus or Deficit / Coverage ratio with `×` suffix, all colored by sign) replace the old custom MetricMini set, LineChart lines have `label: "Hybrid forecast"` / `label: "Base model"` so the new hover tooltips render correctly, and MAPE `base → hybrid` is preserved in the legend meta line. Lint clean, type-clean, no dev server started. File modified: `/home/z/my-project/src/components/flux/views/forecast.tsx`.
+
+---
+Task ID: R2
+Agent: general-purpose
+Task: Upgrade the AI CFO Chat view (`ChatView`) and floating chat FAB (`ChatFab`) to render markdown in assistant responses, add a 3-dot "thinking" loading indicator, polish message bubbles (entrance animation + avatars + hover), add a copy-to-clipboard button, and add a character count to the input.
+
+Work Log:
+- Read `worklog.md` (entry 8g describes the original `ChatView`), `src/components/flux/views/chat.tsx` (current plain-text bubbles + single "Flux is thinking…" line + `dot dot-live` indicator), `src/components/flux/chat-fab.tsx` (compact floating panel, already uses `framer-motion`/`AnimatePresence`), `src/components/flux/markdown.tsx` (exports `Markdown({ content })` → wraps output in `.flux-markdown`; renders headings/bold/italic/code/lists/blockquotes/links/tables), `src/app/globals.css` (verified `.flux-markdown` styles exist at lines 471–509; `.view-fade-in`, `.skeleton`, `.dot.dot-live`/`@keyframes pulse-dot` exist; tokens `--surf3`, `--bdr2`, `--accd`, `--bg3`, `--amb` all defined across all 3 themes), `src/components/flux/icon.tsx` (MAP had `profile: User` but no `user`/`copy` names; `Copy` not imported), and `src/hooks/use-toast.ts` (`useToast()` returns `{ toast, ... }`).
+- **globals.css**: appended a new `@keyframes fluxTyping` block (0%/60%/100% → opacity .3 + translateY(0); 30% → opacity 1 + translateY(-2px)) right after the existing `@keyframes pulse-dot` so the 3-dot typing indicator can use inline `animation: "fluxTyping 1.4s infinite"` with staggered `animationDelay: i*160ms`.
+- **icon.tsx**: added `Copy` to the `lucide-react` import list and `copy: Copy, user: User,` to the MAP (the `User` icon was already imported and mapped to `profile`; now also exposed under the `user` name for chat avatars).
+- **chat.tsx** (full upgrade, file kept at 815 lines, right-rail context sidebar untouched):
+  • Imports: added `useCallback` from react, `motion` from `framer-motion`, `Markdown` from `@/components/flux/markdown`. Added module-level `const MAX_CHARS = 500`.
+  • New `TypingDots()` component: renders a 3-dot `<span>` (6×6 circles, `background: var(--t2)`) inside an inline-flex row; each dot uses inline `style={{ animation: "fluxTyping 1.4s infinite", animationDelay: \`${i*160}ms\` }}` for the staggered typing effect. `aria-label="Flux is typing"` for a11y.
+  • New `MessageRow({ m, onCopy })` component (replaces the inline `messages.map` JSX): wraps each message in `motion.div` with `initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18,ease:"easeOut"}}` for the entrance animation. Row is a flex container with `flexDirection: isUser ? "row-reverse" : "row"` so the avatar sits on the correct side.
+    - Avatar: a 24×24 circle (`background: var(--accd)`), `Icon name={isUser?"user":"brain"}` size 13, color `var(--t2)` for user / `var(--acc)` for assistant. `aria-hidden`.
+    - Bubble: 13px/1.55 line-height, `borderRadius: 12` with the tail corner (`borderBottomRightRadius: 3` for user, `borderBottomLeftRadius: 3` for assistant), `background: var(--acc)` + white text for user / `var(--surf2)` + `1px solid var(--bdr)` + `var(--t1)` text for assistant. `transition: "background .15s, border-color .15s"` for the hover state.
+    - Content: USER messages render `{m.content}` as plain escaped text with `whiteSpace: "pre-wrap"` (preserved); ASSISTANT messages render `<Markdown content={m.content} />` (no `whiteSpace: pre-wrap` so markdown paragraphs/lists render correctly via `.flux-markdown` CSS).
+    - Hover highlight: assistant bubbles get `background: var(--surf3)` + `borderColor: var(--bdr2)` when `hovered` (local `useState` toggled via `onMouseEnter`/`onMouseLeave`).
+    - Copy button (assistant only): absolutely positioned at `top:4; right:4` inside the bubble (`position: relative` on wrapper). Renders only when `hovered && !isUser`. Small pill button (`padding: 3px 5px`, `borderRadius: 6`, `Icon name="copy"` size 11, `fontSize: 10`), `background: var(--surf)`, `border: 1px solid var(--bdr)`. `onClick={() => onCopy(m.content)}`. `aria-label` + `title` set. `zIndex: 2`.
+    - Timestamp: `fmtTime(m.createdAt)` in `.flux-mono` at 9.5px under the bubble (unchanged behavior).
+  • `ChatView` body: added `handleCopy = useCallback((text) => { navigator.clipboard?.writeText(text).then(() => toast({title:"Copied to clipboard"})).catch(() => toast({title:"Couldn't copy", description:"Please try again."})) }, [toast])` with a guard for environments where `navigator.clipboard` is undefined (SSR/older browsers) → shows a "Couldn't copy" toast instead of throwing.
+  • Messages list: replaced the inline map with `<MessageRow key={i} m={m} onCopy={handleCopy} />`.
+  • Thinking indicator: replaced the old single-line "Flux is thinking…" + `dot dot-live` bubble with a new row containing a 24px brain avatar (matching the assistant avatar) + an assistant-style bubble (`var(--surf2)` bg, `1px solid var(--bdr)`, `borderBottomLeftRadius: 3`) that contains only `<TypingDots />` (centered via `inline-flex` + `gap: 8`). Matches the visual language of a real assistant message.
+  • Input row: changed `className="flex gap-2 px-5 py-4"` → `flex gap-2 items-center px-5 py-4` so the new char-count span vertically centers. `onChange` now slices input to `MAX_CHARS` (`setInput(e.target.value.slice(0, MAX_CHARS))`) and added `maxLength={MAX_CHARS}` as a belt-and-suspenders cap. Added a `.flux-mono` `<span>` between the input and send button showing `${charCount}/${MAX_CHARS}` when `charCount > 0` (empty string otherwise to avoid layout shift; `minWidth: 42` + `textAlign: right` reserves space), colored `var(--t3)` normally and `var(--amb)` when `nearLimit = charCount > MAX_CHARS * 0.9` (i.e. > 450). Added `sendDisabled = !input.trim() || sending` and `opacity: sendDisabled ? 0.5 : 1` + `transition: "opacity .15s"` on the send button to dim it further when disabled. Added `aria-label="Send message"` (already present, kept).
+- **chat-fab.tsx** (full rewrite, kept the existing FAB button + AnimatePresence panel shell and the existing spring entrance; compact sizing throughout):
+  • Imports: added `useCallback`, `Markdown`, `useToast`. Added `MAX_CHARS = 500`.
+  • Added `fmtTime()` (was missing — the FAB previously didn't show timestamps; now it does), a compact `TypingDots()` (5×5 dots instead of 6×6 to match the smaller panel), and a `FabMessageRow({ m, onCopy })` component mirroring `MessageRow` but compact (20×20 brain avatar only on assistant side, 12.5px text, `maxWidth: 85%`, 9px timestamp, 10×10 copy icon). Same hover highlight (`var(--surf3)` + `var(--bdr2)`), same copy-button pattern, same `motion.div` entrance (`initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}`).
+  • Added `handleCopy` (identical to ChatView's, with the `navigator.clipboard` guard).
+  • Replaced the inline `messages.map` with `<FabMessageRow key={i} m={m} onCopy={handleCopy} />`.
+  • Replaced the FAB's old single-line "Flux is thinking…" + `dot dot-live` indicator with a brain avatar + bubble containing `<TypingDots />` (matching the assistant row layout).
+  • Fixed the previously-buggy "open full view" header button which had BOTH `onClick` and `onClickCapture` handlers firing redundantly — now a single `onClick={() => { setView("chat"); setOpen(false); }}`.
+  • Added `disabled={sending}` to the clear button (was missing; prevents clearing mid-request).
+  • Added `disabled={sending}` to the suggestion buttons.
+  • Input: same treatment as ChatView — `onChange` slices to `MAX_CHARS`, `maxLength={MAX_CHARS}`, char-count `.flux-mono` span (9.5px, `minWidth: 36`) between input and send, amber when near limit, send button `opacity: sendDisabled ? 0.5 : 1` + `transition: "opacity .15s"`. Added `aria-label="Send message"`.
+  • Changed `catch (e)` (unused binding) to `catch {}` and added an empty-comment `/* swallow */` for the clearChat catch.
+
+Style rules honored:
+- Design-system classes only (`.g32`, `.card`, `.card-h`, `.card-t`, `.card-s`, `.sr`, `.li`, `.badge.{bg,ba,br,bl,bk}`, `.btn.{primary,ghost,secondary,sm}`, `.ins.{ins-acc,ins-amb,ins-grn}`, `.dot.dot-live`, `.flux-scroll`, `.flux-mono`, `.flux-markdown`, `.stack`, `.flex`, `.items-center`, `.justify-end/start`, `.flex-1`, `.min-w-0`, `.flex-wrap`, `.gap-*`); inline `var(--*)` tokens for ALL theming (no Tailwind color utilities — `var(--surf)`, `--surf2`, `--surf3`, `--bg3`, `--bdr`, `--bdr2`, `--acc`, `--accd`, `--t1`, `--t2`, `--t3`, `--amb`, `--grn`, `--red`). `formatINR` unchanged on the sidebar numbers (sidebar untouched). `.flux-mono` on char-count + timestamps. `"use client"` at top of both files.
+- Typing dots use the required inline style pattern: `style={{ animation: "fluxTyping 1.4s infinite", animationDelay: \`${i*160}ms\` }}`, with the `@keyframes fluxTyping` appended to globals.css (not a Tailwind utility).
+
+Verification:
+- `bun run lint` (project-wide `eslint .`) → **exit 0, clean** (zero errors, zero warnings).
+- `bunx eslint src/components/flux/views/chat.tsx src/components/flux/chat-fab.tsx src/components/flux/icon.tsx` → **exit 0** (all three files clean individually).
+- `bunx tsc --noEmit | rg "chat\.tsx|chat-fab|icon\.tsx|markdown\.tsx"` → **zero matches** (no type errors in any of the modified files; the only remaining project-wide TS errors are the pre-existing ones in `charts.tsx`, `examples/websocket/server.ts`, and skills modules noted in prior worklog entries).
+- Did NOT start the dev server (per task instructions).
+
+Stage Summary:
+- Both chat surfaces now render assistant messages as rich markdown (headings, **bold**, *italic*, `code`, lists, blockquotes, links) via the new `<Markdown />` component while user messages stay as plain escaped text. The old single-line "Flux is thinking…" indicator is replaced by a 3-dot `fluxTyping` animation (staggered 0/160/320ms delays) inside an assistant-style bubble with a matching brain avatar. Each message enters with a Framer Motion fade+rise (`opacity 0→1, y 8→0`), has a 24px (FAB: 20px) brain/user avatar on the correct side, highlights on hover (`var(--surf3)` + `var(--bdr2)` border), and shows a copy-to-clipboard button on assistant-message hover that calls `navigator.clipboard.writeText` and toasts "Copied to clipboard". The input now caps at 500 chars, shows a live `N/500` count (amber past 90%), and dims the send button to 50% opacity when disabled. The FAB additionally now shows timestamps and fixed a redundant `onClick`+`onClickCapture` on its expand button. Files modified: `src/app/globals.css` (+ `@keyframes fluxTyping`), `src/components/flux/icon.tsx` (+ `copy`/`user` mappings), `src/components/flux/views/chat.tsx`, `src/components/flux/chat-fab.tsx`. Lint + type-check both clean. No dev server started.
+
+---
+Task ID: R2-ROUND
+Agent: orchestrator (main) — cron review round 2
+Task: QA test all views, fix bugs, add new features (CSV upload UI, forecast history, markdown chat), improve styling (hover micro-interactions, count-up animations, chart tooltips, view transitions).
+
+Work Log:
+- Reviewed prior worklog (FINAL entry confirmed app was complete + verified).
+- Started dev server + mini-service.
+- Performed comprehensive QA via agent-browser across all 7 views (1440x900 viewport): all navigate cleanly, zero console errors, zero page errors.
+- Ran VLM (z-ai vision) visual review on Dashboard, Spending, Forecast, Break, Vault, Profile, Chat — collected specific improvement recommendations.
+
+Bugs found & fixed:
+- **formatINR decimal precision bug**: Spending view's "Daily target" showed ₹1,292.308 (excessive decimals). Fixed `formatINR` in `src/store/flux-store.ts` to round to whole rupees by default (added optional `decimals` param).
+- **LineChart had no interactive tooltips**: Vault growth chart + forecast chart felt static. Added hover tooltips with vertical guide line + data-point dots + a floating tooltip div showing all series values at the hovered x. Also fixed `canvasRef.current` access during render (moved width into hover state).
+- **theme-provider setState-in-effect**: already fixed in prior round, confirmed clean.
+
+New features added:
+1. **CSV upload UI** on Forecast view (`src/components/flux/views/forecast.tsx`): drag-and-drop dropzone (`.dropzone` class), click-to-browse, POSTs multipart to `/api/upload-csv`, "Download sample CSV" button (generates 90-row sample client-side), error surfacing via `.ins ins-red`. Verified: uploaded test-income.csv → Run #3, source=csv, projected ₹58,307, MAPE 9.18%, vault deposit ₹20,264.
+2. **Forecast run history table** on Forecast view: GET /api/forecast, renders a `.table` with Run#/Date/Source/Projected/MAPE/VaultΔ/Action columns, "View" button loads past run's days into the chart for comparison. Verified: 3 runs in history (2 synthetic + 1 csv).
+3. **Markdown rendering for AI chat** (`src/components/flux/markdown.tsx`): new lightweight markdown renderer (headings, bold, italic, lists, code, blockquotes, links, tables). Applied to both `ChatView` and `ChatFab`. Verified: LLM returns `*` bullets + `**bold**` → renders as proper bullet list with bold text.
+4. **Count-up number animations** on Dashboard: metric values animate from 0 to target on mount (easeOutCubic, 900ms). Added `CountUp` component + `useCountUp` hook.
+5. **KPI mini-tiles row** on Dashboard: 4 compact tiles (Avg daily income, Safe daily spend, Savings rate, Vault coverage) using new `.kpi-mini` CSS class.
+6. **Skeleton loading states** for AI Insights panel (4 shimmer rows while fetching).
+7. **Copy-to-clipboard button** on assistant chat messages (appears on hover).
+8. **3-dot typing indicator** (animated, staggered) replacing the plain "thinking" text.
+9. **Message entrance animations** (Framer Motion: opacity+y).
+10. **Avatars** on chat messages (brain icon for AI, user icon for user).
+11. **Character count** on chat input (N/500, amber past 90%).
+
+Styling improvements:
+- Added `.view-fade-in` animation — views fade/slide in on switch (applied via `key={view}` wrapper in page.tsx).
+- Added hover micro-interactions: card lift (translateY -2px), metric-card hover shadow, table-row hover highlight + left-border accent, `.li` icon scale on hover, badge hover lift, toggle brightness on hover.
+- Added progress-bar shimmer animation (`.pf::after`).
+- Added focus-visible outlines for accessibility (`.btn`, `.nav-item`, `.toggle`, `.theme-btn`).
+- Added `::selection` styling.
+- Added `.skeleton` shimmer class.
+- Added `.kpi-mini` / `.kpi-mini-val` / `.kpi-mini-lbl` compact tile classes.
+- Added `.dropzone` dashed-border class with drag/hover states.
+- Added `.flux-markdown` comprehensive styles (p, strong, em, ul, ol, code, pre, h1-3, blockquote, a, hr, table).
+- Added `.quick-link:hover .quick-arrow` slide animation.
+- Added `@keyframes fluxTyping` for the chat typing indicator.
+- Improved LineChart with data-point dots on hover + vertical guide line.
+
+Verification:
+- `bun run lint` → clean (0 errors, 0 warnings).
+- All 7 views render via agent-browser with zero console/page errors.
+- VLM confirms Dashboard is "top-tier UI/UX, rivaling Stripe or Mercury".
+- VLM rates Forecast view 9/10 feature completeness.
+- CSV upload API verified end-to-end (Run #3, real ML forecast on user data).
+- Chat API returns markdown-formatted responses (verified bullets + bold).
+- Forecast history API returns 3 runs with MAPE comparison.
+- ML engine: base MAPE 10.56% → hybrid MAPE 9.18% (residual boosting helps on real CSV data with seasonality).
+
+Stage Summary:
+- Flux is now significantly more polished and feature-rich.
+- 3 new user-facing features: CSV upload, forecast run history comparison, markdown AI chat.
+- 10+ styling improvements: count-up animations, hover micro-interactions, chart tooltips, view transitions, skeletons, markdown rendering, typing indicator, copy button, avatars, focus rings.
+- All lint-clean, all views error-free, all APIs verified.
+- Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
+- Next opportunities: apply CountUp/kpi-mini treatment to Spending + Vault views; add a goals-progress analytics chart to Profile; add keyboard shortcuts (g+d for dashboard, etc.); add a "what-if" income simulator.

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import {
   useFlux,
   formatINR,
@@ -8,7 +9,10 @@ import {
   type ChatMsg,
 } from "@/store/flux-store";
 import { Icon } from "@/components/flux/icon";
+import { Markdown } from "@/components/flux/markdown";
 import { useToast } from "@/hooks/use-toast";
+
+const MAX_CHARS = 500;
 
 /* ── Suggestion prompts (shown only while the conversation is short) ── */
 const SUGGESTIONS = [
@@ -40,6 +44,149 @@ function fmtTime(d?: string | Date): string {
   } catch {
     return "";
   }
+}
+
+/* ── 3-dot typing indicator (staggered via inline animation-delay) ── */
+function TypingDots() {
+  return (
+    <span
+      style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
+      aria-label="Flux is typing"
+    >
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: "var(--t2)",
+            display: "inline-block",
+            animation: "fluxTyping 1.4s infinite",
+            animationDelay: `${i * 160}ms`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/* ── Single message row: avatar + bubble + (assistant) copy button ── */
+function MessageRow({
+  m,
+  onCopy,
+}: {
+  m: ChatMsg;
+  onCopy: (text: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const isUser = m.role === "user";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 8,
+        flexDirection: isUser ? "row-reverse" : "row",
+      }}
+    >
+      {/* avatar */}
+      <div
+        aria-hidden
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: "50%",
+          flexShrink: 0,
+          background: "var(--accd)",
+          color: isUser ? "var(--t2)" : "var(--acc)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginTop: 2,
+        }}
+      >
+        <Icon name={isUser ? "user" : "brain"} size={13} />
+      </div>
+
+      {/* bubble + meta */}
+      <div
+        style={{
+          position: "relative",
+          maxWidth: "80%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: isUser ? "flex-end" : "flex-start",
+          gap: 3,
+        }}
+      >
+        <div
+          style={{
+            padding: "9px 13px",
+            borderRadius: 12,
+            fontSize: 13,
+            lineHeight: 1.55,
+            wordBreak: "break-word",
+            background: isUser ? "var(--acc)" : "var(--surf2)",
+            color: isUser ? "#fff" : "var(--t1)",
+            border: isUser ? "none" : "1px solid var(--bdr)",
+            borderBottomRightRadius: isUser ? 3 : 12,
+            borderBottomLeftRadius: isUser ? 12 : 3,
+            transition: "background .15s, border-color .15s",
+            ...(isUser ? { whiteSpace: "pre-wrap" as const } : {}),
+            ...(hovered && !isUser
+              ? { background: "var(--surf3)", borderColor: "var(--bdr2)" }
+              : {}),
+          }}
+        >
+          {isUser ? m.content : <Markdown content={m.content} />}
+        </div>
+
+        {/* copy button — assistant only, on hover */}
+        {!isUser && hovered && (
+          <button
+            type="button"
+            onClick={() => onCopy(m.content)}
+            title="Copy to clipboard"
+            aria-label="Copy message to clipboard"
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+              background: "var(--surf)",
+              border: "1px solid var(--bdr)",
+              borderRadius: 6,
+              padding: "3px 5px",
+              cursor: "pointer",
+              color: "var(--t2)",
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 10,
+              lineHeight: 1,
+              zIndex: 2,
+            }}
+          >
+            <Icon name="copy" size={11} />
+          </button>
+        )}
+
+        {m.createdAt ? (
+          <div
+            className="flux-mono"
+            style={{ fontSize: 9.5, color: "var(--t3)", padding: "0 4px" }}
+          >
+            {fmtTime(m.createdAt)}
+          </div>
+        ) : null}
+      </div>
+    </motion.div>
+  );
 }
 
 export function ChatView() {
@@ -77,6 +224,23 @@ export function ChatView() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, sending]);
+
+  /* ── Copy assistant message to clipboard ── */
+  const handleCopy = useCallback(
+    (text: string) => {
+      if (typeof navigator === "undefined" || !navigator.clipboard) {
+        toast({ title: "Couldn't copy", description: "Clipboard unavailable." });
+        return;
+      }
+      navigator.clipboard
+        .writeText(text)
+        .then(() => toast({ title: "Copied to clipboard" }))
+        .catch(() =>
+          toast({ title: "Couldn't copy", description: "Please try again." }),
+        );
+    },
+    [toast],
+  );
 
   const send = async (text: string) => {
     const trimmed = text.trim();
@@ -148,6 +312,9 @@ export function ChatView() {
 
   const showSuggestions = messages.length < 2;
   const showWelcome = messages.length === 0 && !sending;
+  const sendDisabled = !input.trim() || sending;
+  const charCount = input.length;
+  const nearLimit = charCount > MAX_CHARS * 0.9;
 
   return (
     <div className="g32">
@@ -233,72 +400,42 @@ export function ChatView() {
             </div>
           )}
 
-          {messages.map((m, i) => {
-            const isUser = m.role === "user";
-            return (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: isUser ? "flex-end" : "flex-start",
-                  gap: 3,
-                }}
-              >
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    padding: "9px 13px",
-                    borderRadius: 12,
-                    fontSize: 13,
-                    lineHeight: 1.55,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    background: isUser ? "var(--acc)" : "var(--surf2)",
-                    color: isUser ? "#fff" : "var(--t1)",
-                    border: isUser ? "none" : "1px solid var(--bdr)",
-                    borderBottomRightRadius: isUser ? 3 : 12,
-                    borderBottomLeftRadius: isUser ? 12 : 3,
-                  }}
-                >
-                  {m.content}
-                </div>
-                {m.createdAt ? (
-                  <div
-                    className="flux-mono"
-                    style={{ fontSize: 9.5, color: "var(--t3)", padding: "0 4px" }}
-                  >
-                    {fmtTime(m.createdAt)}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+          {messages.map((m, i) => (
+            <MessageRow key={i} m={m} onCopy={handleCopy} />
+          ))}
 
           {sending && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
-                gap: 3,
-              }}
-            >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <div
+                aria-hidden
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                  background: "var(--accd)",
+                  color: "var(--acc)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginTop: 2,
+                }}
+              >
+                <Icon name="brain" size={13} />
+              </div>
               <div
                 style={{
-                  padding: "9px 13px",
+                  padding: "11px 14px",
                   borderRadius: 12,
                   borderBottomLeftRadius: 3,
                   background: "var(--surf2)",
                   border: "1px solid var(--bdr)",
-                  fontSize: 13,
-                  color: "var(--t3)",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 7,
+                  gap: 8,
                 }}
               >
-                <span className="dot dot-live" /> Flux is thinking…
+                <TypingDots />
               </div>
             </div>
           )}
@@ -330,7 +467,7 @@ export function ChatView() {
 
         {/* input */}
         <div
-          className="flex gap-2 px-5 py-4"
+          className="flex gap-2 items-center px-5 py-4"
           style={{
             borderTop: "1px solid var(--bdr)",
             background: "var(--surf2)",
@@ -338,7 +475,7 @@ export function ChatView() {
         >
           <input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value.slice(0, MAX_CHARS))}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -347,6 +484,7 @@ export function ChatView() {
             }}
             placeholder="Ask about your finances…"
             className="flex-1"
+            maxLength={MAX_CHARS}
             style={{
               background: "var(--surf)",
               border: "1px solid var(--bdr)",
@@ -357,12 +495,30 @@ export function ChatView() {
               outline: "none",
             }}
           />
+          <span
+            className="flux-mono"
+            style={{
+              fontSize: 10,
+              color: nearLimit ? "var(--amb)" : "var(--t3)",
+              minWidth: 42,
+              textAlign: "right",
+              userSelect: "none",
+            }}
+          >
+            {charCount > 0 ? `${charCount}/${MAX_CHARS}` : ""}
+          </span>
           <button
             className="btn btn-primary"
             type="button"
             onClick={() => send(input)}
-            disabled={!input.trim() || sending}
-            style={{ width: 38, height: 38, padding: 0 }}
+            disabled={sendDisabled}
+            style={{
+              width: 38,
+              height: 38,
+              padding: 0,
+              opacity: sendDisabled ? 0.5 : 1,
+              transition: "opacity .15s",
+            }}
             aria-label="Send message"
           >
             <Icon name="send" size={15} />

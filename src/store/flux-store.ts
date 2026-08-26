@@ -183,7 +183,7 @@ export const useFlux = create<FluxStore>((set, get) => ({
 
 /* ── derived selectors / helpers ── */
 
-export function formatINR(n: number, opts?: { compact?: boolean }) {
+export function formatINR(n: number, opts?: { compact?: boolean; decimals?: number }) {
   if (n == null || isNaN(n)) return "₹0";
   if (opts?.compact) {
     if (Math.abs(n) >= 10000000) return `₹${(n / 10000000).toFixed(2)}Cr`;
@@ -191,7 +191,13 @@ export function formatINR(n: number, opts?: { compact?: boolean }) {
     if (Math.abs(n) >= 1000) return `₹${(n / 1000).toFixed(1)}k`;
     return `₹${Math.round(n)}`;
   }
-  return `₹${n.toLocaleString("en-IN")}`;
+  const rounded = opts?.decimals != null
+    ? Number(n.toFixed(opts.decimals))
+    : Math.round(n);
+  return `₹${rounded.toLocaleString("en-IN", {
+    maximumFractionDigits: opts?.decimals ?? 0,
+    minimumFractionDigits: 0,
+  })}`;
 }
 
 export function runwayMonths(income: number, spending: number, vault: number) {

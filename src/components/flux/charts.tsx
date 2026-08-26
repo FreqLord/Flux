@@ -161,6 +161,8 @@ export function LineChart({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const colors = useThemeColors();
+  const [hover, setHover] = useState<{ i: number; x: number; w: number } | null>(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -201,6 +203,19 @@ export function LineChart({
 
     const colorMap: any = { acc: colors.acc, red: colors.red, grn: colors.grn, amb: colors.amb, teal: colors.teal, t1: colors.t1 };
 
+    // hover vertical line
+    if (hover && hover.i >= 0 && hover.i < n) {
+      const x = xAt(hover.i);
+      ctx.strokeStyle = colors.t4 || colors.bdr2;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, pad.t);
+      ctx.lineTo(x, pad.t + ch);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     lines.forEach((l) => {
       ctx.strokeStyle = colorMap[l.color];
       ctx.lineWidth = l.dashed ? 1.6 : 2.2;
@@ -211,13 +226,84 @@ export function LineChart({
       ctx.setLineDash([]);
     });
 
+    // hover dots
+    if (hover && hover.i >= 0 && hover.i < n) {
+      lines.forEach((l) => {
+        const v = l.data[hover.i];
+        if (v == null) return;
+        const x = xAt(hover.i), y = yAt(v);
+        ctx.fillStyle = colorMap[l.color];
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = colors.surf || "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+    }
+
     ctx.fillStyle = colors.ctxt; ctx.textAlign = "center"; ctx.textBaseline = "top";
     ctx.font = "600 9px Inter, sans-serif";
     const step = Math.ceil(n / 8);
     labels.forEach((l, i) => { if (i % step === 0 || i === n - 1) ctx.fillText(l, xAt(i), H - pad.b + 6); });
-  }, [lines, labels, colors, band, height, formatVal]);
+  }, [lines, labels, colors, band, height, formatVal, hover]);
 
-  return <canvas ref={canvasRef} style={{ width: "100%", height }} />;
+  function onMove(e: React.MouseEvent) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const pad = { l: 44, r: 12 };
+    const cw = canvas.clientWidth - pad.l - pad.r;
+    const n = labels.length;
+    const i = Math.round(((x - pad.l) / cw) * (n - 1));
+    if (i >= 0 && i < n) setHover({ i, x, w: canvas.clientWidth });
+    else setHover(null);
+  }
+
+  const colorMap: any = { acc: colors.acc, red: colors.red, grn: colors.grn, amb: colors.amb, teal: colors.teal, t1: colors.t1 };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <canvas
+        ref={canvasRef}
+        style={{ width: "100%", height, cursor: "pointer" }}
+        onMouseMove={onMove}
+        onMouseLeave={() => setHover(null)}
+      />
+      {hover && hover.i >= 0 && hover.i < labels.length && (
+        <div
+          style={{
+            position: "absolute",
+            left: Math.min(Math.max(hover.x, 60), (hover.w || 300) - 60),
+            top: 4,
+            transform: "translateX(-50%)",
+            background: "var(--surf3)",
+            border: "1px solid var(--bdr2)",
+            borderRadius: 8,
+            padding: "6px 9px",
+            fontSize: 10.5,
+            color: "var(--t1)",
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+            boxShadow: "var(--s2)",
+            zIndex: 5,
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 3 }}>{labels[hover.i]}</div>
+          {lines.map((l, si) => (
+            <div key={si} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: colorMap[l.color] }} />
+              <span style={{ color: "var(--t3)" }}>{l.label || l.color}:</span>
+              <span className="flux-mono" style={{ fontWeight: 600 }}>
+                {formatVal ? formatVal(l.data[hover.i]) : l.data[hover.i]}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ── Donut chart ── */
