@@ -300,18 +300,32 @@ export function ProfileView() {
           )}
         </div>
 
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div className="label-sm" style={{ marginBottom: 5 }}>Stability score</div>
-          <div
-            className="flux-mono"
-            style={{
-              fontSize: 52, fontWeight: 600, color: "var(--acc)",
-              lineHeight: 1, letterSpacing: "-.035em",
-            }}
-          >
-            {profile.stabilityScore}
+        <div style={{ textAlign: "right", flexShrink: 0, display: "flex", alignItems: "center", gap: 18 }}>
+          <div style={{ position: "relative", width: 76, height: 76, flexShrink: 0 }}>
+            <svg width={76} height={76} style={{ transform: "rotate(-90deg)" }}>
+              <circle cx={38} cy={38} r={32} fill="none" stroke="var(--bg3)" strokeWidth={6} />
+              <circle
+                cx={38} cy={38} r={32} fill="none"
+                stroke={profile.stabilityScore >= 70 ? "var(--grn)" : profile.stabilityScore >= 50 ? "var(--amb)" : "var(--red)"}
+                strokeWidth={6}
+                strokeDasharray={2 * Math.PI * 32}
+                strokeDashoffset={2 * Math.PI * 32 * (1 - profile.stabilityScore / 100)}
+                strokeLinecap="round"
+                style={{ transition: "stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1), stroke .4s" }}
+              />
+            </svg>
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <div className="flux-mono" style={{ fontSize: 20, fontWeight: 700, color: "var(--t1)", lineHeight: 1 }}>{profile.stabilityScore}</div>
+              <div style={{ fontSize: 7.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 700, marginTop: 2 }}>/ 100</div>
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>Good standing</div>
+          <div>
+            <div className="label-sm" style={{ marginBottom: 4 }}>Stability score</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: profile.stabilityScore >= 70 ? "var(--grn)" : profile.stabilityScore >= 50 ? "var(--amb)" : "var(--red)" }}>
+              {profile.stabilityScore >= 70 ? "Good standing" : profile.stabilityScore >= 50 ? "Fair standing" : "Needs attention"}
+            </div>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2 }}>Updated live</div>
+          </div>
         </div>
 
         {!editingProfile && (
@@ -374,10 +388,10 @@ export function ProfileView() {
                           {formatGoal(key, profile)}
                         </span>
                         <button
-                          className="btn btn-ghost btn-sm"
+                          className="btn btn-secondary btn-sm"
                           onClick={() => startEditGoal(key)}
                         >
-                          Edit
+                          <Icon name="settings" size={11} /> Edit
                         </button>
                       </>
                     )}

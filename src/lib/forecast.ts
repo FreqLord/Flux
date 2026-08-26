@@ -590,3 +590,132 @@ export function simulateBreak(input: BreakSimInput): BreakSimResult {
     recommendedWindow: { start: recStart, end: recEnd },
   };
 }
+
+/* ─────────────────────────────────────────────────────────────
+   What-If Simulator — projects runway/vault under user-defined
+   income & spending changes over a horizon.
+   ───────────────────────────────────────────────────────────── */
+
+export interface WhatIfInput {
+  currentIncome: number;
+  currentSpending: number;
+  vaultBalance: number;
+  baselineNeed: number; // monthly essentials
+  incomeChangePct: number; // e.g. +20 = +20%, -15 = -15%
+  spendingChangePct: number;
+  vaultContributionPct: number; // 0-100, % of surplus to vault
+  horizonMonths: number; // 1-12
+}
+
+export interface WhatIfMonth {
+  month: number;
+  income: number;
+  spending: number;
+  surplus: number;
+  vaultDeposit: number;
+  vaultBalance: number;
+  runwayMonths: number;
+  cumulativeSaved: number;
+}
+
+export interface WhatIfResult {
+  months: WhatIfMonth[];
+  finalVault: number;
+  finalRunway: number;
+  totalSaved: number;
+  totalVaultContrib: number;
+  netWorthDelta: number;
+  verdict: "improved" | "stable" | "risky";
+  comparison: {
+    baselineRunway: number;
+    scenarioRunway: number;
+    runwayDelta: number;
+    baselineVault: number;
+    scenarioVault: number;
+    vaultDelta: number;
+  };
+}
+
+export function simulateWhatIf(input: WhatIfInput): WhatIfResult {
+  const {
+    currentIncome,
+    currentSpending,
+    vaultBalance: startVault,
+    baselineNeed,
+    incomeChangePct,
+    spendingChangePct,
+    vaultContributionPct,
+    horizonMonths,
+  } = input;
+
+  const newIncome = currentIncome * (1 + incomeChangePct / 100);
+  const newSpending = currentSpending * (1 + spendingChangePct / 100);
+  const monthlySurplus = newIncome - newSpending;
+  const vaultRate = Math.max(0, Math.min(100, vaultContributionPct)) / 100;
+
+  // baseline scenario (no changes)
+  const baselineSurplus = currentIncome - currentSpending;
+  let baselineVault = startVault;
+  for (let m = 0; m < horizonMonths; m++) {
+    baselineVault += Math.max(0, baselineSurplus) * 0.4; // default 40% rule
+  }
+
+  const months: WhatIfMonth[] = [];
+  let vault = startVault;
+  let totalSaved = 0;
+  let totalVaultContrib = 0;
+
+  for (let m = 1; m <= horizonMonths; m++) {
+    const surplus = monthlySurplus;
+    const vaultDeposit = surplus > 0 ? surplus * vaultRate : 0;
+    // if deficit, pull from vault to cover shortfall (up to balance)
+    const vaultWithdrawal = surplus < 0 ? Math.min(vault, Math.abs(surplus)) : 0;
+    vault = vault + vaultDeposit - vaultWithdrawal;
+    totalSaved += Math.max(0, surplus);
+    totalVaultContrib += vaultDeposit - vaultWithdrawal;
+
+    const burn = Math.max(1, newSpending);
+    const runway = (vault + Math.max(0, surplus)) / burn;
+
+    months.push({
+      month: m,
+      income: round2(newIncome),
+      spending: round2(newSpending),
+      surplus: round2(surplus),
+      vaultDeposit: round2(vaultDeposit - vaultWithdrawal),
+      vaultBalance: round2(vault),
+      runwayMonths: round2(runway),
+      cumulativeSaved: round2(totalSaved),
+    });
+  }
+
+  const finalVault = vault;
+  const finalRunway = months[months.length - 1].runwayMonths;
+  const netWorthDelta = round2((finalVault - startVault) + totalSaved);
+
+  const baselineRunway = (startVault + Math.max(0, baselineSurplus) * horizonMonths) / Math.max(1, currentSpending);
+  const scenarioRunway = finalRunway;
+
+  let verdict: WhatIfResult["verdict"] = "stable";
+  if (scenarioRunway > baselineRunway + 0.3 && monthlySurplus > 0) verdict = "improved";
+  else if (scenarioRunway < baselineRunway - 0.3 || finalVault < startVault * 0.7) verdict = "risky";
+
+  return {
+    months,
+    finalVault: round2(finalVault),
+    finalRunway: round2(finalRunway),
+    totalSaved: round2(totalSaved),
+    totalVaultContrib: round2(totalVaultContrib),
+    netWorthDelta,
+    verdict,
+    comparison: {
+      baselineRunway: round2(baselineRunway),
+      scenarioRunway: round2(scenarioRunway),
+      runwayDelta: round2(scenarioRunway - baselineRunway),
+      baselineVault: round2(baselineVault),
+      scenarioVault: round2(finalVault),
+      vaultDelta: round2(finalVault - baselineVault),
+    },
+  };
+}
+

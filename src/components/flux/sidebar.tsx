@@ -14,6 +14,7 @@ const NAV: { section: string; items: { key: ViewKey; icon: string; label: string
       { key: "spending", icon: "gauge", label: "Spending" },
       { key: "forecast", icon: "forecast", label: "Income Forecast" },
       { key: "break", icon: "calendar", label: "Break Planner" },
+      { key: "simulator", icon: "cpu", label: "What-If Simulator" },
     ],
   },
   {

@@ -8,6 +8,7 @@ export type ViewKey =
   | "forecast"
   | "break"
   | "vault"
+  | "simulator"
   | "profile"
   | "chat";
 

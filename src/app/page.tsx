@@ -11,8 +11,11 @@ import { SpendingView } from "@/components/flux/views/spending";
 import { ForecastView } from "@/components/flux/views/forecast";
 import { BreakView } from "@/components/flux/views/break";
 import { VaultView } from "@/components/flux/views/vault";
+import { SimulatorView } from "@/components/flux/views/simulator";
 import { ProfileView } from "@/components/flux/views/profile";
 import { ChatView } from "@/components/flux/views/chat";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useFluxTheme } from "@/components/flux/theme-provider";
 
 export default function Home() {
   const view = useFlux((s) => s.view);
@@ -20,8 +23,17 @@ export default function Home() {
   const loading = useFlux((s) => s.loading);
   const error = useFlux((s) => s.error);
   const profile = useFlux((s) => s.profile);
+  const { toggleTheme } = useFluxTheme();
 
   useEffect(() => { load(); }, [load]);
+  useKeyboardShortcuts();
+
+  // Listen for the global "cycle theme" event from the keyboard hook
+  useEffect(() => {
+    const handler = () => toggleTheme();
+    document.addEventListener("flux:cycle-theme", handler);
+    return () => document.removeEventListener("flux:cycle-theme", handler);
+  }, [toggleTheme]);
 
   return (
     <div className="app-layout">
@@ -61,6 +73,7 @@ export default function Home() {
                   {view === "forecast" && <ForecastView />}
                   {view === "break" && <BreakView />}
                   {view === "vault" && <VaultView />}
+                  {view === "simulator" && <SimulatorView />}
                   {view === "profile" && <ProfileView />}
                   {view === "chat" && <ChatView />}
                 </div>
@@ -84,6 +97,7 @@ function ViewTitle() {
     spending: { t: "Spending", s: `${snap?.monthLabel ?? ""} · ${snap?.daysPassed ?? 0} days in · ${(snap?.daysInMonth ?? 31) - (snap?.daysPassed ?? 0)} days remaining` },
     forecast: { t: "Income Forecast", s: `30-day hybrid prediction · ${snap?.monthLabel ?? ""} · 94% historical accuracy` },
     break: { t: "Break Planner", s: "Model the cost of time off before you commit" },
+    simulator: { t: "What-If Simulator", s: "Project your runway under income & spending changes" },
     vault: { t: "Safety Vault", s: "Your automated financial safety net" },
     profile: { t: "Profile & Settings", s: "Account, goals, appearance, and security" },
     chat: { t: "AI CFO Chat", s: "Ask Flux anything about your finances" },

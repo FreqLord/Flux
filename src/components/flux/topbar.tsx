@@ -2,6 +2,7 @@
 
 import { useFluxTheme } from "./theme-provider";
 import { Icon } from "./icon";
+import { ShortcutsHelp } from "./shortcuts-help";
 import { useFlux, formatINR } from "@/store/flux-store";
 
 const TITLES: Record<string, { title: string; sub: string }> = {
@@ -9,6 +10,7 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   spending: { title: "Spending", sub: "Pacing and category pressure" },
   forecast: { title: "Income Forecast", sub: "30-day hybrid prediction" },
   break: { title: "Break Planner", sub: "Model the cost of time off" },
+  simulator: { title: "What-If Simulator", sub: "Project runway under changes" },
   vault: { title: "Safety Vault", sub: "Your automated safety net" },
   profile: { title: "Profile & Settings", sub: "Account, goals, security" },
   chat: { title: "AI CFO Chat", sub: "Ask Flux anything" },
@@ -53,11 +55,13 @@ export function Topbar() {
           className="theme-btn"
           style={{ width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={toggleTheme}
-          title={`Theme: ${theme}`}
+          title={`Theme: ${theme} (?)`}
           type="button"
         >
           <Icon name={theme === "dark" ? "moon" : theme === "light" ? "sun" : "paper"} size={14} />
         </button>
+
+        <ShortcutsHelp />
 
         <button
           className="theme-btn md:hidden"

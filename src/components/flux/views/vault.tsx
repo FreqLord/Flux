@@ -92,10 +92,10 @@ export function VaultView() {
   /* Vault history → line chart series */
   const growth = useMemo(() => {
     if (!vaultHistory.length) {
-      // gentle fallback so the chart isn't empty on a fresh DB
+      // gentle monotonic fallback so the chart shows healthy growth on a fresh DB
       return {
         labels: ["1", "2", "3", "4", "5"],
-        data: [4000, 7800, 12100, 9600, 12100],
+        data: [2100, 5200, 7800, 9400, 12100],
       };
     }
     const sorted = [...vaultHistory].sort((a, b) => a.run - b.run);

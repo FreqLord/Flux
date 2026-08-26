@@ -426,3 +426,67 @@ Stage Summary:
 - All lint-clean, all views error-free, all APIs verified.
 - Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
 - Next opportunities: apply CountUp/kpi-mini treatment to Spending + Vault views; add a goals-progress analytics chart to Profile; add keyboard shortcuts (g+d for dashboard, etc.); add a "what-if" income simulator.
+
+---
+Task ID: R3-ROUND
+Agent: orchestrator (main) — cron review round 3
+Task: QA all views, fix VLM-identified bugs, add What-If Simulator + keyboard shortcuts + stability ring, improve styling.
+
+Work Log:
+- Reviewed prior worklog (R2-ROUND confirmed app was polished + feature-rich).
+- Started dev server + mini-service, ran comprehensive QA via agent-browser across all 7 views: zero console errors, zero page errors.
+- Ran VLM (z-ai vision) review on Profile, Vault, Break, Spending, Chat — collected specific issues.
+
+Bugs found & fixed:
+- **Vault growth chart misleading decline**: fallback series `[4000, 7800, 12100, 9600, 12100]` showed a dip contradicting the all-deposit transaction list. Fixed to monotonically increasing `[2100, 5200, 7800, 9400, 12100]` in `src/components/flux/views/vault.tsx`.
+- **Profile stability score was just a flat number**: no visual context. Replaced with a 76px ProgressRing (color-coded green/amber/red by score) + status label ("Good standing"/"Fair standing"/"Needs attention") + "/100" denominator.
+- **Profile goal Edit buttons low-contrast**: were `btn-ghost` (blended into background). Changed to `btn-secondary` + added a settings icon for clearer affordance.
+
+New features added:
+1. **What-If Simulator** (NEW view at `src/components/flux/views/simulator.tsx` + `POST /api/whatif` + `simulateWhatIf()` in `src/lib/forecast.ts`):
+   - Interactive sliders: Income change (-50% to +100%), Spending change, Vault contribution rate (0-100%), Horizon (1-12 months)
+   - Live scenario banner showing Δ Runway / Δ Vault / Net Saved (color-coded green/red)
+   - KPI mini-tiles row (new income, new spend, monthly surplus, horizon total) with CountUp animations
+   - 5 quick presets: "Raise rates +20%", "Cut spending 15%", "Aggressive saver (80% to vault)", "Lean season (-25% income)", "Freelance surge (+40% income)"
+   - Verdict insight (improved/stable/risky) with baseline-vs-scenario comparison
+   - Projection LineChart (vault scenario vs baseline dashed) with hover tooltips
+   - Monthly breakdown table (income/spending/surplus/vaultΔ/vault/runway per month)
+   - Verified: 20% income ↑, 5% spending ↓, 50% vault rate, 6mo → verdict "improved", final runway 4.16mo, vault ₹96,130, +0.56mo runway delta. VLM rates 9/10.
+2. **Keyboard shortcuts** (`src/hooks/use-keyboard-shortcuts.ts`):
+   - `g d/s/f/b/w/v/p/c` → navigate to Dashboard/Spending/Forecast/Break/Simulator/Vault/Profile/Chat (two-step prefix, 1.2s timeout)
+   - `?` → cycle theme (dark→light→paper)
+   - `/` → jump to AI chat
+   - `h` → toggle shortcuts help modal
+   - `Esc` → close overlays
+   - Only triggers when not typing in an input/textarea
+3. **Shortcuts help modal** (`src/components/flux/shortcuts-help.tsx`):
+   - Clickable "?" button in topbar (next to theme toggle)
+   - Modal overlay with grouped shortcuts (Navigation, Actions) using `<kbd>` key caps
+   - Pro tip explaining the two-step `g` prefix
+   - Backdrop blur + click-to-close
+4. **Stability score progress ring** on Profile (described above)
+5. Added "simulator" to ViewKey + sidebar nav + page.tsx view router + topbar title
+
+Styling improvements:
+- Stability ring uses SVG with animated stroke-dashoffset (1.4s cubic-bezier) + color-coding
+- Goal Edit buttons now `btn-secondary` with settings icon
+- Topbar theme button title updated to hint "?" shortcut
+- Shortcuts modal uses backdrop-filter blur + kbd styling
+
+Verification:
+- `bun run lint` → clean (0 errors, 0 warnings).
+- All 8 views (added simulator) render via agent-browser with zero console/page errors.
+- What-If API verified: returns proper WhatIfResult with 6 months, verdict, comparison deltas.
+- Keyboard shortcut `g w` verified: navigates to simulator (confirmed via "What-If Simulator" heading).
+- Keyboard shortcut `h` verified: opens shortcuts help modal.
+- VLM rates What-If Simulator 9/10 feature completeness.
+- VLM praises stability ring: "Excellent. The 72/100 score is legible, and the 'Good standing' text provides immediate context."
+- Zero errors in dev log (excluding expected LLM 429 rate-limits).
+
+Stage Summary:
+- Flux now has 8 views (added What-If Simulator).
+- 3 new user-facing features: What-If Simulator (full scenario modeling with presets + chart + table), keyboard shortcuts (8 navigation + 3 action shortcuts), shortcuts help modal.
+- 3 bug fixes / polish: vault chart misleading decline, stability ring visualization, Edit button affordance.
+- All lint-clean, all views error-free, all APIs verified.
+- Dev server: `cd /home/z/my-project && ./node_modules/.bin/next dev -p 3000` (clear .next if CSS errors).
+- Next opportunities: apply CountUp to Spending/Vault metric values; add tooltip on stability ring hover; add a "goals progress" chart to Profile; add streaming LLM responses for chat; add transaction search/filter on Spending; add a dark/light/paper theme preview cards in Appearance.
