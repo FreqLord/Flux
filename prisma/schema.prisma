@@ -1,0 +1,131 @@
+// Flux — Prisma schema (SQLite)
+// Financial state, transactions, vault, forecast runs, chat
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id              String   @id @default("me")
+  name            String   @default("Arjun Kumar")
+  email           String   @default("arjun.kumar@gmail.com")
+  city            String   @default("Mumbai, India")
+  role            String   @default("Freelance Developer")
+  stabilityScore  Int      @default(72)
+  incomeTarget    Int      @default(67000)
+  spendingTarget  Int      @default(38000)
+  vaultGoal       Int      @default(30000)
+  minRunwayMonths Float    @default(2.0)
+  workType        String   @default("Freelancer")
+  paymentFreq     String   @default("Irregular")
+  currency        String   @default("INR")
+  onboardedAt     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Snapshot {
+  id             Int      @id @default(1)
+  monthLabel     String   @default("March 2026")
+  monthShort     String   @default("Mar")
+  year           Int      @default(2026)
+  monthIndex     Int      @default(2)
+  today          Int      @default(18)
+  daysInMonth    Int      @default(31)
+  daysPassed     Int      @default(18)
+  income         Int      @default(48200)
+  spending       Int      @default(31400)
+  baselineNeed   Int      @default(11000)
+  vaultBalance   Int      @default(12100)
+  updatedAt      DateTime @updatedAt
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  label     String
+  date      DateTime
+  category  String
+  amount    Int
+  flow      String // in | out | vault
+  tone      String  @default("bg") // bg, br, ba, bt, bl, bk
+  createdAt DateTime @default(now())
+}
+
+model VaultTransaction {
+  id        String   @id @default(cuid())
+  label     String
+  date      DateTime
+  type      String // Auto | Manual | Withdraw | Interest
+  amount    Int
+  flow      String // in | out
+  tone      String  @default("bg")
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id     String @id @default(cuid())
+  icon   String
+  label  String
+  spent  Int
+  limit  Int
+  tone   String @default("acc")
+  order  Int    @default(0)
+}
+
+model ForecastRun {
+  id               String   @id @default(cuid())
+  runNumber        Int
+  createdAt        DateTime @default(now())
+  projectedIncome  Float
+  essentialCosts   Float
+  surplusDeficit   Float
+  coverageRatio    Float
+  vaultAction      String   // deposit | withdraw
+  vaultDelta       Float
+  vaultBalanceAfter Float
+  baseMape         Float
+  hybridMape       Float
+  horizon          Int      @default(30)
+  source           String   @default("synthetic") // synthetic | csv
+  csvFilename      String?
+  historyJson      String   // JSON of historical ds/y used
+  days             ForecastDay[]
+}
+
+model ForecastDay {
+  id        String   @id @default(cuid())
+  runId     String
+  dayIndex  Int
+  date      DateTime
+  baseYhat  Float
+  finalY    Float
+  lowBand   Float
+  highBand  Float
+  isFuture  Boolean  @default(true)
+  run       ForecastRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+model HeatmapDay {
+  id          String @id @default(cuid())
+  day         Int
+  level       Int
+  amount      Int
+  probability Int
+  predicted   Boolean @default(false)
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String   // user | assistant
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  id    String @id
+  value String
+}
