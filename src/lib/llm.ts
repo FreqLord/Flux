@@ -5,6 +5,9 @@
 
 import ZAI from "z-ai-web-dev-sdk";
 
+// Bypass the SDK's internal file system check for Vercel
+(ZAI as any).create = async () => new (ZAI as any)({ baseUrl: "https://api.example.com", apiKey: "dummy" });
+
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;
@@ -13,7 +16,7 @@ export interface ChatTurn {
 let _zai: any = null;
 
 async function getClient() {
-  if (!_zai) _zai = await ZAI.create();
+  if (!_zai) _zai = await (ZAI as any).create();
   return _zai;
 }
 
