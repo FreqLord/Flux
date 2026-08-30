@@ -161,6 +161,3 @@ Flux/
 | **Shreyash Tiwari** | Design and frontend collaboration — [@Shreyash-17-10](https://github.com/Shreyash-17-10) |
 | **Sushil Singh** | Predictive modeling using Prophet and XGBoost — [@FreqLord](https://github.com/FreqLord) |
 
-## License
-
-Released under the [MIT License](./LICENSE).
