@@ -149,9 +149,6 @@ Flux/
 | `bun run db:migrate` | Run Prisma migrations in dev |
 | `bun run db:reset` | Reset the database |
 
-## Related repositories
-
-- **[Flux_AI](https://github.com/FreqLord/Flux_AI)** — the NeuralProphet + XGBoost forecasting model behind the Income Forecast view.
 
 ## Contributors
 
