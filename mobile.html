@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title data-i18n="mobile.documentTitle">Flux Mobile</title>
+<link rel="stylesheet" href="css/style.css"/>
+<style>
+/* Existing CSS remains untouched */
+body.mobile-app {
+  background: var(--bg);
+  min-height: 100vh;
+  color: var(--t1);
+}
+.mob-shell {
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 18px 14px 110px;
+}
+.mob-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin: -18px -14px 14px;
+  padding: 14px 14px 12px;
+  background: var(--bg2);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--bdr);
+}
+.mob-head-row,
+.mob-card-head,
+.mob-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mob-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mob-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+.mob-sub {
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 2px;
+}
+.mob-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.mob-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+.mob-tabs::-webkit-scrollbar { display: none; }
+.mob-tab {
+  flex: 0 0 auto;
+  min-width: 74px;
+  border: 1px solid var(--bdr);
+  background: var(--surf);
+  color: var(--t3);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+  transition: border-color .14s, background .14s, color .14s, transform .14s;
+}
+.mob-tab:hover,
+.mob-tab:focus-visible {
+  border-color: var(--accm);
+  color: var(--t2);
+  outline: none;
+}
+.mob-tab:active {
+  transform: translateY(1px);
+}
+.mob-tab.active {
+  background: var(--accd);
+  border-color: var(--accm);
+  color: var(--acc);
+}
+.mob-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mob-card {
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: var(--s1);
+}
+.mob-grid4 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.mob-stat {
+  background: var(--surf2);
+  border: 1px solid var(--bdr);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: var(--s1);
+}
+.mob-stat-label,
+.mob-mini-label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--t3);
+  margin-bottom: 5px;
+}
+.mob-stat strong,
+.mob-mini-card strong {
+  font-family: var(--mono);
+  font-size: 18px;
+  letter-spacing: -.03em;
+}
+.mob-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mob-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bdr);
+}
+.mob-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.mob-row-copy {
+  min-width: 0;
+  flex: 1;
+}
+.mob-row-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t1);
+  line-height: 1.4;
+}
+.mob-row-meta {
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 2px;
+  line-height: 1.45;
+}
+.mob-row-value,
+.mob-row-side {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+.mob-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.mob-mini-card {
+  background: var(--surf2);
+  border: 1px solid var(--bdr);
+  border-radius: 14px;
+  padding: 12px;
+}
+.mob-heat-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+.mob-heat-cell {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t1);
+}
+.mob-range {
+  margin-top: 10px;
+}
+.mob-slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.mob-pill-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mob-chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bdr);
+  background: var(--surf2);
+  font-size: 11px;
+  color: var(--t2);
+}
+.mob-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mob-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--acc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+}
+.mob-score {
+  margin-left: auto;
+  text-align: right;
+}
+.mob-score strong {
+  font-family: var(--mono);
+  font-size: 28px;
+}
+.mob-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.mob-actions-grid .btn {
+  width: 100%;
+}
+[data-theme="paper"] .mob-header {
+  background: rgba(240,232,212,.9);
+}
+@media (max-width: 420px) {
+  .mob-shell { padding-left: 10px; padding-right: 10px; }
+  .mob-header { margin-left: -10px; margin-right: -10px; }
+  .mob-grid4,
+  .mob-mini-grid,
+  .mob-actions-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body class="mobile-app">
+<div class="mob-shell">
+  <header class="mob-header">
+    <div class="mob-head-row">
+      <div class="mob-brand">
+        <div class="logo-mark">fx</div>
+        <div>
+          <div class="mob-title" data-i18n="mobile.title">Flux Mobile</div>
+          <div class="mob-sub" id="mob-overview-sub">March 2026</div>
+        </div>
+      </div>
+      <div class="mob-actions">
+        <div class="language-switcher" data-i18n-aria-label="common.languageSwitcher" aria-label="Language switcher">
+          <button class="language-btn" data-language-btn="en" type="button" onclick="setLanguage('en')" title="English">EN</button>
+          <button class="language-btn" data-language-btn="hi" type="button" onclick="setLanguage('hi')" title="हिन्दी">हिं</button>
+        </div>
+        <button class="theme-btn" data-theme-btn="dark" data-i18n-title="theme.dark" type="button" onclick="applyTheme('dark')" title="Dark"><span data-icon="moon" data-icon-size="14"></span></button>
+        <button class="theme-btn" data-theme-btn="light" data-i18n-title="theme.light" type="button" onclick="applyTheme('light')" title="Light"><span data-icon="sun" data-icon-size="14"></span></button>
+        <button class="theme-btn" data-theme-btn="paper" data-i18n-title="theme.paper" type="button" onclick="applyTheme('paper')" title="Paper"><span data-icon="paper" data-icon-size="14"></span></button>
+        <button class="icon-btn" type="button" data-action="tour" data-i18n-title="mobile.tour" title="Tour"><span data-icon="info" data-icon-size="14"></span></button>
+      </div>
+    </div>
+    <div class="mob-tabs" role="tablist" data-i18n-aria-label="mobile.tabsLabel" aria-label="Mobile sections">
+      <button class="mob-tab active" data-i18n="mobile.overview" type="button" role="tab" aria-selected="true" data-action="mobile-tab" data-mobile-tab="overview">Home</button>
+      <button class="mob-tab" data-i18n="mobile.spending" type="button" role="tab" aria-selected="false" data-action="mobile-tab" data-mobile-tab="spending">Spend</button>
+      <button class="mob-tab" data-i18n="mobile.forecast" type="button" role="tab" aria-selected="false" data-action="mobile-tab" data-mobile-tab="forecast">Forecast</button>
+      <button class="mob-tab" data-i18n="mobile.break" type="button" role="tab" aria-selected="false" data-action="mobile-tab" data-mobile-tab="break">Break</button>
+      <button class="mob-tab" data-i18n="mobile.vault" type="button" role="tab" aria-selected="false" data-action="mobile-tab" data-mobile-tab="vault">Vault</button>
+      <button class="mob-tab" data-i18n="mobile.profile" type="button" role="tab" aria-selected="false" data-action="mobile-tab" data-mobile-tab="profile">Profile</button>
+    </div>
+  </header>
+
+  <section class="mob-pane" data-mobile-pane="overview" role="tabpanel" aria-hidden="false">
+    <div class="mob-grid4">
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.income">Income</span><strong id="mob-income">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.spendingLabel">Spending</span><strong id="mob-spending">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.runway">Runway</span><strong id="mob-runway">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.vaultLabel">Vault</span><strong id="mob-vault">-</strong></div>
+    </div>
+    <div class="mob-card">
+      <div class="mob-card-head">
+        <div>
+          <div class="card-t" data-i18n="mobile.cashFlow">Cash flow</div>
+          <div class="card-s" data-i18n="mobile.lastMonths">Last 5 months</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" data-i18n="common.export" type="button" data-action="export">Export</button>
+      </div>
+      <canvas id="mob-main-chart"></canvas>
+    </div>
+    <div class="mob-card">
+      <div class="mob-card-head">
+        <div class="card-t" data-i18n="mobile.recentActivity">Recent activity</div>
+        <a href="dashboard.html" class="btn btn-ghost btn-sm" data-i18n="common.desktop">Desktop</a>
+      </div>
+      <div class="mob-list" id="mob-transactions"></div>
+    </div>
+  </section>
+
+  <section class="mob-pane" data-mobile-pane="spending" role="tabpanel" aria-hidden="true" hidden>
+    <div class="mob-grid4">
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.zone">Zone</span><strong id="mob-spend-zone">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.remaining">Remaining</span><strong id="mob-spend-remaining">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.dailyTarget">Daily target</span><strong id="mob-spend-daily">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.spendRatio">Spend ratio</span><strong id="mob-spend-ratio">-</strong></div>
+    </div>
+    <div class="mob-card">
+      <div class="mob-card-head">
+        <div class="card-t" data-i18n="mobile.dailySpending">Daily spending</div>
+        <button class="btn btn-primary btn-sm" data-i18n="common.add" type="button" data-action="add-expense">Add</button>
+      </div>
+      <canvas id="mob-daily-chart"></canvas>
+    </div>
+    <div class="mob-card">
+      <div class="card-t" data-i18n="mobile.categories" style="margin-bottom:10px;">Categories</div>
+      <div class="mob-list" id="mob-categories"></div>
+    </div>
+  </section>
+
+  <section class="mob-pane" data-mobile-pane="forecast" role="tabpanel" aria-hidden="true" hidden>
+    <div class="mob-grid4">
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.projected">Projected</span><strong id="mob-forecast-total">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.range">Range</span><strong id="mob-forecast-range">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.nextPeak">Next peak</span><strong id="mob-forecast-peak">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.bestBreak">Best break</span><strong id="mob-forecast-break">-</strong></div>
+    </div>
+    <div class="mob-card">
+      <div class="card-t" data-i18n="mobile.next14" style="margin-bottom:10px;">Next 14 days</div>
+      <div class="mob-heat-strip" id="mob-heat-strip"></div>
+    </div>
+    <div class="mob-card">
+      <div class="card-t" data-i18n="mobile.weeklyTrack" style="margin-bottom:10px;">Weekly track</div>
+      <canvas id="mob-forecast-chart"></canvas>
+    </div>
+  </section>
+
+  <section class="mob-pane" data-mobile-pane="break" role="tabpanel" aria-hidden="true" hidden>
+    <div class="mob-card">
+      <div class="mob-card-head">
+        <div>
+          <div class="card-t" data-i18n="mobile.breakPlanner">Break planner</div>
+          <div class="card-s" id="mob-break-window">-</div>
+        </div>
+        <button class="btn btn-primary btn-sm" data-i18n="common.run" type="button" data-action="run-simulation">Run</button>
+      </div>
+      <div class="mob-range">
+        <div class="mob-slider-head"><span class="body-sm" data-i18n="mobile.duration">Duration</span><strong id="mob-break-days">-</strong></div>
+        <input type="range" id="mob-days-slider" min="1" max="21" value="7"/>
+      </div>
+      <div class="mob-range">
+        <div class="mob-slider-head"><span class="body-sm" data-i18n="mobile.dailySpend">Daily spend</span><strong id="mob-break-exp">-</strong></div>
+        <input type="range" id="mob-exp-slider" min="500" max="5000" value="1200" step="100"/>
+      </div>
+      <div class="mob-range">
+        <div class="mob-slider-head"><span class="body-sm" data-i18n="mobile.start">Start</span><strong id="mob-break-start">-</strong></div>
+        <input type="range" id="mob-start-slider" min="0" max="13" value="3"/>
+      </div>
+      <div class="mob-inline" style="margin-top:12px;">
+        <span class="body-sm" data-i18n="common.useVaultIfNeeded">Use vault if needed</span>
+        <div class="toggle on" id="mob-vault-toggle"></div>
+      </div>
+    </div>
+    <div class="mob-card">
+      <div class="card-t" data-i18n="mobile.projection" style="margin-bottom:10px;">Projection</div>
+      <canvas id="mob-proj-chart"></canvas>
+    </div>
+    <div class="mob-card">
+      <div class="card-t" data-i18n="mobile.result" style="margin-bottom:10px;">Result</div>
+      <div id="mobile-break-result"></div>
+    </div>
+  </section>
+
+  <section class="mob-pane" data-mobile-pane="vault" role="tabpanel" aria-hidden="true" hidden>
+    <div class="mob-grid4">
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.balance">Balance</span><strong id="mob-vault-balance">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.progress">Progress</span><strong id="mob-vault-progress">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.coverage">Coverage</span><strong id="mob-vault-days">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.runway">Runway</span><strong id="mob-vault-runway">-</strong></div>
+    </div>
+    <div class="mob-actions-grid">
+      <button class="btn btn-primary" data-i18n="common.deposit" type="button" data-action="deposit">Deposit</button>
+      <button class="btn btn-secondary" data-i18n="common.withdraw" type="button" data-action="withdraw">Withdraw</button>
+    </div>
+    <div class="mob-card">
+      <div class="card-t" data-i18n="mobile.vaultTrend" style="margin-bottom:10px;">Vault trend</div>
+      <canvas id="mob-vault-chart"></canvas>
+    </div>
+    <div class="mob-card">
+      <div class="card-t" data-i18n="mobile.recentVaultActivity" style="margin-bottom:10px;">Recent vault activity</div>
+      <div class="mob-list" id="mob-vault-transactions"></div>
+    </div>
+  </section>
+
+  <section class="mob-pane" data-mobile-pane="profile" role="tabpanel" aria-hidden="true" hidden>
+    <div class="mob-card">
+      <div class="mob-profile">
+        <div class="mob-avatar" id="profile-avatar">AK</div>
+        <div>
+          <div class="card-t" id="mob-profile-name">-</div>
+          <div class="mob-row-meta" id="mob-profile-role">-</div>
+          <div class="mob-row-meta" id="mob-profile-meta">-</div>
+        </div>
+        <div class="mob-score">
+          <span class="mob-stat-label" data-i18n="common.score">Score</span>
+          <strong id="mob-profile-score">-</strong>
+        </div>
+      </div>
+    </div>
+    <div class="mob-grid4">
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.incomeTarget">Income target</span><strong id="mob-profile-income">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.spendTarget">Spend target</span><strong id="mob-profile-spend">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.vaultGoal">Vault goal</span><strong id="mob-profile-vault">-</strong></div>
+      <div class="mob-stat"><span class="mob-stat-label" data-i18n="mobile.runwayFloor">Runway floor</span><strong id="mob-profile-runway">-</strong></div>
+    </div>
+    <div class="mob-actions-grid">
+      <button class="btn btn-secondary" data-i18n="common.resetStats" type="button" data-action="reset-stats">Reset stats</button>
+      <a href="profile.html" class="btn btn-secondary" data-i18n="common.desktopSettings">Desktop settings</a>
+      <button class="btn btn-secondary" data-i18n="common.export" type="button" data-action="export">Export</button>
+      <a href="index.html" class="btn btn-ghost" data-i18n="common.signOut" data-action="signout">Sign out</a>
+    </div>
+  </section>
+</div>
+
+<div class="chat-fab" id="chat-fab"></div>
+<script src="js/flux.js"></script>
+</body>
+</html>

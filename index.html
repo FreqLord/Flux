@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title data-i18n="index.documentTitle">Flux - Financial stability for irregular income</title>
+<link rel="stylesheet" href="css/style.css"/>
+<style>
+.cta-strip { padding: 72px 40px; border-top: 1px solid var(--bdr); text-align: center; }
+.problem-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; border: 1px solid var(--bdr); border-radius: var(--r-lg); overflow: hidden; }
+.problem-item { padding: 28px 24px; background: var(--surf); }
+.problem-icon { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; background: var(--accd); border-radius: 12px; color: var(--acc); margin-bottom: 13px; }
+.problem-title { font-size: 14.5px; font-weight: 700; color: var(--t1); margin-bottom: 7px; letter-spacing: -.015em; }
+.problem-body { font-size: 12.5px; color: var(--t3); line-height: 1.65; }
+.landing-preview { margin-top: 44px; display: grid; grid-template-columns: 1.3fr .8fr; gap: 18px; align-items: stretch; }
+.preview-card { background: linear-gradient(180deg, var(--surf), var(--surf2)); border: 1px solid var(--bdr); border-radius: var(--r-xl); box-shadow: var(--s3); padding: 22px; }
+.preview-metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+.preview-metric { padding: 14px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--bdr); }
+.preview-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 12px; }
+.preview-stat { display: flex; justify-content: space-between; font-size: 12px; padding: 10px 0; border-bottom: 1px solid var(--bdr); }
+.preview-stat:last-child { border-bottom: none; }
+.landing-theme-wrap { display:flex; align-items:center; gap:12px; }
+[data-theme="paper"] .landing-layout .hero-title,
+[data-theme="paper"] .landing-layout .section-heading,
+[data-theme="paper"] .landing-layout .problem-title {
+  font-family: "Georgia", "Times New Roman", serif;
+  letter-spacing: .01em;
+}
+@media (max-width: 960px) {
+  .hero { padding: 90px 24px 40px; }
+  .hero-title { font-size: 32px; }
+  .hero-stats { flex-direction: column; gap: 20px; }
+  .problem-grid, .feature-grid, .landing-preview, .preview-grid { grid-template-columns: 1fr; }
+  .landing-nav { padding: 0 24px; }
+  .cta-strip { padding: 56px 24px; }
+  .landing-theme-wrap { gap: 8px; }
+}
+</style>
+</head>
+<body class="landing-layout">
+
+<nav class="landing-nav">
+  <a href="index.html" style="display:flex;align-items:center;gap:10px;">
+    <div class="logo-mark">fx</div>
+    <span class="logo-name">Flux</span>
+  </a>
+  <div class="landing-theme-wrap">
+    <div class="language-switcher" data-i18n-aria-label="common.languageSwitcher" aria-label="Language switcher">
+      <button class="language-btn" data-language-btn="en" type="button" onclick="setLanguage('en')" title="English">EN</button>
+      <button class="language-btn" data-language-btn="hi" type="button" onclick="setLanguage('hi')" title="हिन्दी">हिं</button>
+    </div>
+    <div class="theme-switcher" data-i18n-aria-label="common.themeSwitcher" aria-label="Theme switcher">
+      <button class="theme-btn" data-theme-btn="dark" data-i18n-title="theme.dark" type="button" onclick="applyTheme('dark')" title="Dark"><span data-icon="moon" data-icon-size="14"></span></button>
+      <button class="theme-btn" data-theme-btn="light" data-i18n-title="theme.light" type="button" onclick="applyTheme('light')" title="Light"><span data-icon="sun" data-icon-size="14"></span></button>
+      <button class="theme-btn" data-theme-btn="paper" data-i18n-title="theme.paper" type="button" onclick="applyTheme('paper')" title="Paper"><span data-icon="paper" data-icon-size="14"></span></button>
+    </div>
+    <a href="dashboard.html" class="btn btn-primary btn-sm" data-i18n="index.openDemo" style="color:white;">Open Demo</a>
+  </div>
+</nav>
+
+<main>
+  <section class="hero">
+    <div class="hero-eyebrow" data-i18n="index.eyebrow">Meet Flux</div>
+    <h1 class="hero-title" data-i18n-html="index.heroTitle">Financial stability for the <em>independent</em> workforce.</h1>
+    <p class="hero-body" data-i18n="index.heroBody">
+      Freelancers, creators, and gig workers face a problem traditional finance apps ignore: irregular income. Flux predicts your earnings, protects your runway, and builds a safety buffer so you can focus on your work instead of second-guessing your cash flow.
+    </p>
+
+    <div class="hero-actions">
+      <a href="dashboard.html" class="btn btn-primary btn-lg" data-i18n="index.heroDemo">View Live Demo</a>
+      <a href="break.html" class="btn btn-secondary btn-lg" data-i18n="index.heroBreak">Test the Break Planner</a>
+      <a href="mobile-start.html" class="btn btn-ghost btn-lg" data-i18n="index.heroMobile">Open Mobile UI</a>
+    </div>
+
+    <div class="runway-callout">
+      <div>
+        <div class="label-sm" data-i18n="index.runwayLabel" style="margin-bottom:4px;">Average user runway</div>
+        <div class="runway-callout-val" data-i18n="index.runwayValueLong">2.6 months</div>
+      </div>
+      <div data-i18n="index.runwayCopy" style="font-size:12.5px;color:var(--t2);line-height:1.55;max-width:280px;">
+        Flux users know how long they can stay safe, when to push harder, and when they can actually rest.
+      </div>
+    </div>
+
+    <div class="hero-stats">
+      <div>
+        <div class="hstat-n">94%</div>
+        <div class="hstat-l" data-i18n="index.statForecast">Income forecast confidence</div>
+      </div>
+      <div>
+        <div class="hstat-n">₹30k+</div>
+        <div class="hstat-l" data-i18n="index.statVault">Average vault buffer built</div>
+      </div>
+      <div>
+        <div class="hstat-n">0</div>
+        <div class="hstat-l" data-i18n="index.statSheets">Spreadsheets required</div>
+      </div>
+    </div>
+
+    <div class="landing-preview">
+      <div class="preview-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div>
+            <div class="card-t" data-i18n="index.previewTitle">Instant dashboard read</div>
+            <div class="card-s" data-i18n="index.previewSubtitle">Core numbers at a glance.</div>
+          </div>
+          <span class="badge bg"><span class="dot dot-live"></span>&nbsp;<span data-i18n="common.dynamic">Dynamic</span></span>
+        </div>
+        <div class="preview-metrics">
+          <div class="preview-metric"><div class="label-sm" data-i18n="index.income" style="margin-bottom:4px;">Income</div><div style="font-family:var(--mono);font-size:22px;font-weight:600;">₹48,200</div></div>
+          <div class="preview-metric"><div class="label-sm" data-i18n="index.spending" style="margin-bottom:4px;">Spending</div><div style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--red);">₹31,400</div></div>
+          <div class="preview-metric"><div class="label-sm" data-i18n="index.runway" style="margin-bottom:4px;">Runway</div><div data-i18n="index.runwayValueShort" style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--acc);">2.6 mo</div></div>
+        </div>
+        <canvas id="main-chart" data-chart="1" style="height:160px;"></canvas>
+      </div>
+      <div class="preview-card">
+        <div class="card-t" data-i18n="index.whyTitle" style="margin-bottom:14px;">Why it feels easier</div>
+        <div class="preview-stat"><span data-i18n="index.whyTheme" style="color:var(--t3);">Theme support</span><strong data-i18n="index.whyThemeValue">Dark, Light, Paper</strong></div>
+        <div class="preview-stat"><span data-i18n="index.whyBreak" style="color:var(--t3);">Break planning</span><strong data-i18n="index.whyBreakValue">Interactive scenario model</strong></div>
+        <div class="preview-stat"><span data-i18n="index.whyAssistant" style="color:var(--t3);">Assistant inputs</span><strong data-i18n="index.whyAssistantValue">Understands preset prompts</strong></div>
+        <div class="preview-stat"><span data-i18n="index.whyCharts" style="color:var(--t3);">Charts</span><strong data-i18n="index.whyChartsValue">Clearer bar-first comparisons</strong></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding: 0 40px 72px; max-width: 1100px; margin: 0 auto;">
+    <div class="section-eyebrow" data-i18n="index.problemEyebrow">The Problem</div>
+    <h2 class="section-heading" data-i18n="index.problemHeading">Traditional finance apps are built for salaries. You do not have one.</h2>
+    <div class="problem-grid">
+      <div class="problem-item">
+        <div class="problem-icon" data-icon="gauge" data-icon-size="18"></div>
+        <div class="problem-title" data-i18n="index.problem1Title">Blind budgeting</div>
+        <div class="problem-body" data-i18n="index.problem1Body">Standard apps tell you what you spent yesterday. They cannot tell you if the next seven days are strong enough to carry the month.</div>
+      </div>
+      <div class="problem-item">
+        <div class="problem-icon" data-icon="forecast" data-icon-size="18"></div>
+        <div class="problem-title" data-i18n="index.problem2Title">Feast and famine</div>
+        <div class="problem-body" data-i18n="index.problem2Body">When your income swings between high-output weeks and quiet ones, static monthly budgeting becomes exhausting very quickly.</div>
+      </div>
+      <div class="problem-item">
+        <div class="problem-icon" data-icon="calendar" data-icon-size="18"></div>
+        <div class="problem-title" data-i18n="index.problem3Title">Guilt-driven burnout</div>
+        <div class="problem-body" data-i18n="index.problem3Body">Without a clear safety picture, even a short break can feel irresponsible. That uncertainty keeps people working past the point of clarity.</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding: 0 40px 72px; max-width: 1100px; margin: 0 auto;">
+    <div class="section-eyebrow" data-i18n="index.solutionEyebrow">The Solution</div>
+    <h2 class="section-heading" data-i18n="index.solutionHeading">A system designed to absorb volatility.</h2>
+    <div class="feature-grid">
+      <a href="heatmap.html" class="feature-item">
+        <div class="fi-icon" data-icon="forecast" data-icon-size="16"></div>
+        <div class="fi-title" data-i18n="index.feature1Title">Income Forecasting</div>
+        <div class="fi-desc" data-i18n="index.feature1Body">Flux anticipates high-earning days, low-pressure windows, and likely swings before they turn into surprises.</div>
+      </a>
+      <a href="vault.html" class="feature-item">
+        <div class="fi-icon" data-icon="vault" data-icon-size="16"></div>
+        <div class="fi-title" data-i18n="index.feature2Title">The Safety Vault</div>
+        <div class="fi-desc" data-i18n="index.feature2Body">Automated rules stash away surplus cash on your strongest days so slow weeks feel manageable instead of threatening.</div>
+      </a>
+      <a href="break.html" class="feature-item">
+        <div class="fi-icon" data-icon="calendar" data-icon-size="16"></div>
+        <div class="fi-title" data-i18n="index.feature3Title">Break Planner</div>
+        <div class="fi-desc" data-i18n="index.feature3Body">Model the exact cost of time off, compare start windows, and see whether the break is actually safe before you commit.</div>
+      </a>
+    </div>
+  </section>
+</main>
+
+<section class="cta-strip">
+  <div class="section-eyebrow" data-i18n="index.ctaEyebrow" style="margin-bottom:12px;">Get started</div>
+  <h2 class="section-heading" data-i18n="index.ctaHeading" style="margin:0 auto 14px;text-align:center;max-width:480px;">Your runway starts now.</h2>
+  <p data-i18n="index.ctaBody" style="font-family:var(--font);font-size:13.5px;color:var(--t3);margin-bottom:26px;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.65;">No spreadsheets. No salary required. Just a clear picture of where you stand and what to do next.</p>
+  <a href="dashboard.html" class="btn btn-primary btn-lg" data-i18n="index.ctaButton">Open dashboard</a>
+</section>
+
+<footer class="landing-footer">
+  <a href="index.html" style="display:flex;align-items:center;gap:9px;color:var(--t1);">
+    <div class="logo-mark" style="width:24px;height:24px;font-size:10px;">fx</div>
+    <span class="logo-name" style="font-size:14px;">Flux</span>
+  </a>
+  <p class="footer-copy" data-i18n="index.footerCopy">© 2026 Flux. Built for the independent workforce.</p>
+  <div style="display:flex;gap:20px;">
+    <a href="dashboard.html" data-i18n="index.footerDemo" style="font-family:var(--font);font-size:12px;color:var(--t2);">Demo</a>
+    <a href="profile.html" data-i18n="index.footerSettings" style="font-family:var(--font);font-size:12px;color:var(--t2);">Settings</a>
+  </div>
+</footer>
+
+<script src="js/flux.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  fluxUtils.drawBars('main-chart', [{ data: [42, 58, 31, 46, 49, 44, 43, 48], color: 'acc' }, { data: [30, 38, 26, 34, 32, 28, 29, 31], color: 'red' }], ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'], { h: 160, pad: { t: 18, r: 12, b: 26, l: 42 } });
+});
+</script>
+</body>
+</html>

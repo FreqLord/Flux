@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title data-i18n="dashboard.documentTitle">Flux - Dashboard</title>
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div>
+          <h1 class="page-title" id="dash-greeting">Good morning, Arjun</h1>
+          <p class="page-sub" id="dash-period">Financial overview · March 2026 · 18 days in</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="badge bk" id="dash-month-badge">Mar 2026</span>
+          <button class="btn btn-secondary btn-sm" data-i18n="dashboard.exportCsv" data-action="export">Export CSV</button>
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+
+      <div class="g4 mb2 a1">
+        <div class="metric-card">
+          <div class="metric-lbl" data-i18n="dashboard.monthlyIncome">Monthly Income</div>
+          <div class="metric-val" id="dash-income-val" data-count="48200" data-prefix="₹">₹0</div>
+          <div class="metric-d dp" data-i18n="dashboard.incomeDelta" style="margin-bottom:10px;">Up 12% vs February</div>
+          <div class="prog" style="margin-bottom:4px;"><div class="pf pf-acc" id="dash-income-progress" style="width:72%;"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);"><span id="dash-income-target-copy">₹67k target</span><span id="dash-income-target-pct">72% reached</span></div>
+          <canvas id="spark-inc" style="height:34px;margin-top:10px;"></canvas>
+        </div>
+        <div class="metric-card">
+          <div class="metric-lbl" data-i18n="dashboard.monthlySpending">Monthly Spending</div>
+          <div class="metric-val" id="dash-spending-val" style="color:var(--red);" data-count="31400" data-prefix="₹">₹0</div>
+          <div class="metric-d dn" data-i18n="dashboard.spendingDelta" style="margin-bottom:9px;">Up 4% vs February</div>
+          <div class="zone-bar" style="margin-bottom:5px;"><div class="zs zs-safe"></div><div class="zs zs-mod"></div><div class="zs zs-risk"></div></div>
+          <div id="dash-zone-text" style="font-size:10.5px;font-weight:600;">Moderate zone · 65% of income</div>
+          <canvas id="spark-spd" style="height:34px;margin-top:10px;"></canvas>
+        </div>
+        <div class="runway-card">
+          <div class="metric-lbl" data-i18n="dashboard.financialRunway">Financial Runway</div>
+          <div id="dash-runway-val" style="font-family:var(--mono);font-size:32px;font-weight:600;color:#fff;line-height:1;letter-spacing:-.035em;margin-bottom:5px;position:relative;z-index:1;">2.6 months</div>
+          <div class="metric-d" data-i18n="dashboard.runwayDelta" style="color:rgba(255,255,255,.75);margin-bottom:10px;position:relative;z-index:1;">Up +0.3 vs last month</div>
+          <div style="height:4px;background:rgba(255,255,255,.2);border-radius:100px;overflow:hidden;margin-bottom:5px;position:relative;z-index:1;"><div id="dash-runway-bar" style="width:43%;height:100%;background:rgba(255,255,255,.85);border-radius:100px;transition:width .6s;"></div></div>
+          <div data-i18n="dashboard.runwayFloor" style="font-size:10px;color:rgba(255,255,255,.52);position:relative;z-index:1;">Minimum safe floor: 2.0 months</div>
+          <div id="dash-runway-sub" style="font-size:11.5px;color:rgba(255,255,255,.72);margin-top:6px;position:relative;z-index:1;font-weight:500;">Survive 2.6 months without new income</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-lbl" data-i18n="dashboard.safetyVault">Safety Vault</div>
+          <div class="metric-val" id="dash-vault-val" style="color:var(--teal);" data-count="12100" data-prefix="₹">₹0</div>
+          <div class="metric-d dp" data-i18n="dashboard.vaultStatus" style="margin-bottom:10px;">Auto-saving is running normally</div>
+          <div class="prog" style="margin-bottom:4px;"><div class="pf pf-teal" id="dash-vault-prog" style="width:40%;"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);"><span id="dash-vault-goal-label">₹30k goal</span><span id="dash-vault-pct">40% reached</span></div>
+          <canvas id="spark-vlt" style="height:34px;margin-top:10px;"></canvas>
+        </div>
+      </div>
+
+      <div class="g32 mb2 a2">
+        <div class="card">
+          <div class="card-h">
+            <div><div class="card-t" data-i18n="dashboard.cashPicture">Monthly cash picture</div><div class="card-s" data-i18n="dashboard.cashPictureSub">Income and spending by month</div></div>
+            <div style="display:flex;gap:14px;font-size:11px;align-items:center;">
+              <span style="display:flex;align-items:center;gap:5px;color:var(--t3);"><span style="width:14px;height:2px;background:var(--acc);display:inline-block;border-radius:3px;"></span><span data-i18n="index.income">Income</span></span>
+              <span style="display:flex;align-items:center;gap:5px;color:var(--t3);"><span style="width:14px;height:2px;background:var(--red);display:inline-block;border-radius:3px;"></span><span data-i18n="index.spending">Spending</span></span>
+            </div>
+          </div>
+          <canvas id="main-chart" style="height:195px;"></canvas>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px;padding-top:16px;border-top:1px solid var(--bdr);">
+            <div class="stat-callout"><span class="stat-n" id="dash-avg-income">₹43.6k</span><span class="stat-l" data-i18n="dashboard.avgIncome">Avg income</span></div>
+            <div class="stat-callout"><span class="stat-n" id="dash-avg-spend">₹30.1k</span><span class="stat-l" data-i18n="dashboard.avgSpend">Avg spend</span></div>
+            <div class="stat-callout"><span class="stat-n" id="dash-best-month" style="color:var(--grn);">₹58k</span><span class="stat-l" data-i18n="dashboard.bestMonth">Best month</span></div>
+            <div class="stat-callout"><span class="stat-n" id="dash-avg-saved" style="color:var(--teal);">₹13.5k</span><span class="stat-l" data-i18n="dashboard.avgSaved">Avg saved</span></div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="card card-sm">
+            <div class="card-h" style="margin-bottom:10px;">
+              <div><div class="card-t" data-i18n="dashboard.thisWeek">This week</div><div class="card-s" data-i18n="dashboard.liveWindow">Live operating window</div></div>
+              <span class="badge bg"><span class="dot dot-live"></span>&nbsp;<span data-i18n="common.live">Live</span></span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;"><span data-i18n="dashboard.predictedIncome" style="color:var(--t3);">Predicted income</span><span id="dash-week-predicted" style="font-family:var(--mono);font-weight:600;">₹22k - ₹28k</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;"><span data-i18n="dashboard.todayOutlook" style="color:var(--t3);">Today's outlook</span><span class="badge bg" id="dash-week-outlook">High probability</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;"><span data-i18n="dashboard.nextPeakDay" style="color:var(--t3);">Next peak day</span><span id="dash-next-peak" style="font-weight:600;">Thu, Mar 19</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;"><span data-i18n="dashboard.safeDailySpend" style="color:var(--t3);">Safe daily spend</span><span id="dash-safe-daily" style="font-family:var(--mono);font-weight:600;">₹2,200</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;"><span data-i18n="dashboard.autoSavedToday" style="color:var(--t3);">Auto-saved today</span><span id="dash-saved-today" style="font-family:var(--mono);font-weight:600;color:var(--teal);">₹2,400</span></div>
+            </div>
+          </div>
+          <div class="card card-sm">
+            <div class="card-t" data-i18n="dashboard.aiInsights" style="margin-bottom:11px;">AI Insights</div>
+            <div class="ins ins-acc"><div class="ins-h" data-i18n="dashboard.peakDay">Peak day</div><div class="ins-b" data-i18n="dashboard.peakDayBody">Keep your next peak day clear for higher-value work.</div></div>
+            <div class="ins ins-amb"><div class="ins-h" data-i18n="dashboard.spendingNudge">Spending nudge</div><div class="ins-b" data-i18n="dashboard.spendingNudgeBody">Check category pressure before adding new discretionary spend.</div></div>
+            <div class="ins ins-teal"><div class="ins-h" data-i18n="dashboard.vaultOnTrack">Vault on track</div><div class="ins-b" id="dash-vault-insight">₹2,400 auto-saved today. Runway holds at 2.6 months.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="g21 a3">
+        <div class="card card-flush">
+          <div style="padding:14px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;">
+            <div><div class="card-t" data-i18n="dashboard.recentTransactions">Recent transactions</div><div class="card-s" data-i18n="dashboard.lastEntries">Last 5 entries</div></div>
+            <a href="expense.html" class="btn btn-ghost btn-sm" data-i18n="dashboard.allTransactions">All transactions →</a>
+          </div>
+          <table class="table">
+            <thead><tr><th data-i18n="table.description">Description</th><th data-i18n="table.date">Date</th><th data-i18n="table.category">Category</th><th data-i18n="table.amount" style="text-align:right;">Amount</th></tr></thead>
+            <tbody id="dash-transactions">
+              <tr><td class="td-m">Freelance UI project</td><td>Mar 13</td><td><span class="badge bg">Income</span></td><td class="td-n" style="text-align:right;color:var(--grn);">+₹18,000</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="stack">
+          <div class="card card-sm">
+            <div class="card-t" id="dash-spending-mix-title" style="margin-bottom:3px;">March spending mix</div>
+            <div class="card-s" id="dash-spending-mix-sub" style="margin-bottom:14px;">By category · ₹31,400 total</div>
+            <div style="display:flex;align-items:center;gap:18px;">
+              <canvas id="spend-donut" style="width:120px;height:120px;flex-shrink:0;"></canvas>
+              <div style="flex:1;display:flex;flex-direction:column;gap:6px;" id="dash-spend-legend"></div>
+            </div>
+          </div>
+          <div class="card card-sm">
+            <div class="card-t" data-i18n="dashboard.quickAccess" style="margin-bottom:10px;">Quick access</div>
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <a href="expense.html" style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--surf2);border:1px solid var(--bdr);border-radius:9px;color:var(--t1);transition:.14s;text-decoration:none;" onmouseover="this.style.borderColor='var(--bdr2)'" onmouseout="this.style.borderColor='var(--bdr)'"><span data-icon="gauge" data-icon-size="15" style="color:var(--t3);"></span><div style="flex:1;"><div data-i18n="nav.spending" style="font-size:12.5px;font-weight:600;">Spending</div><div data-i18n="dashboard.quickSpendingBody" style="font-size:10.5px;color:var(--t3);">Daily pacing and category pressure</div></div><span style="font-size:12px;color:var(--t3);">→</span></a>
+              <a href="heatmap.html" style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--surf2);border:1px solid var(--bdr);border-radius:9px;color:var(--t1);transition:.14s;text-decoration:none;" onmouseover="this.style.borderColor='var(--bdr2)'" onmouseout="this.style.borderColor='var(--bdr)'"><span data-icon="forecast" data-icon-size="15" style="color:var(--t3);"></span><div style="flex:1;"><div data-i18n="nav.forecast" style="font-size:12.5px;font-weight:600;">Income Forecast</div><div data-i18n="dashboard.quickForecastBody" style="font-size:10.5px;color:var(--t3);">Peak-day calendar and weekly plan</div></div><span style="font-size:12px;color:var(--t3);">→</span></a>
+              <a href="break.html" style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--surf2);border:1px solid var(--bdr);border-radius:9px;color:var(--t1);transition:.14s;text-decoration:none;" onmouseover="this.style.borderColor='var(--bdr2)'" onmouseout="this.style.borderColor='var(--bdr)'"><span data-icon="calendar" data-icon-size="15" style="color:var(--t3);"></span><div style="flex:1;"><div data-i18n="nav.break" style="font-size:12.5px;font-weight:600;">Break Planner</div><div data-i18n="dashboard.quickBreakBody" style="font-size:10.5px;color:var(--t3);">Runway-safe rest windows</div></div><span style="font-size:12px;color:var(--t3);">→</span></a>
+              <a href="vault.html" style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--surf2);border:1px solid var(--bdr);border-radius:9px;color:var(--t1);transition:.14s;text-decoration:none;" onmouseover="this.style.borderColor='var(--bdr2)'" onmouseout="this.style.borderColor='var(--bdr)'"><span data-icon="vault" data-icon-size="15" style="color:var(--t3);"></span><div style="flex:1;"><div data-i18n="nav.vault" style="font-size:12.5px;font-weight:600;">Safety Vault</div><div data-i18n="dashboard.quickVaultBody" style="font-size:10.5px;color:var(--t3);">Buffer growth and coverage</div></div><span style="font-size:12px;color:var(--t3);">→</span></a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+<div class="chat-fab" id="chat-fab"></div>
+<nav class="mobile-nav" id="mobile-nav"></nav>
+<script src="js/flux.js"></script>
+<script>
+renderTopbar('Dashboard');
+</script>
+</body>
+</html>

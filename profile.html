@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title data-i18n="profile.documentTitle">Flux - Profile</title>
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div><h1 class="page-title" data-i18n="nav.profile">Profile &amp; Settings</h1><p class="page-sub" data-i18n="profile.pageSub">Account, goals, appearance, and security</p></div>
+        <button class="btn btn-secondary btn-sm" data-i18n="profile.editProfile" data-action="edit-profile">Edit profile</button>
+      </div>
+    </div>
+    <div class="page-body">
+
+      <div class="card mb2 a1" style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;">
+        <div id="profile-avatar" style="width:60px;height:60px;background:var(--acc);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:white;flex-shrink:0;">AK</div>
+        <div style="flex:1;min-width:200px;">
+          <div id="profile-name" style="font-size:20px;font-weight:700;color:var(--t1);letter-spacing:-.03em;margin-bottom:3px;">Arjun Kumar</div>
+          <div id="profile-meta" style="font-size:12.5px;color:var(--t3);margin-bottom:11px;">arjun.kumar@gmail.com · Mumbai, India · 6 months on Flux</div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;"><span class="badge bl" id="profile-role-badge">Freelance Developer</span><span class="badge bg" data-i18n="profile.complete">Complete</span><span class="badge bk" data-i18n="profile.irregularIncome">Irregular income</span></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div class="label-sm" data-i18n="profile.stabilityScore" style="margin-bottom:5px;">Stability score</div>
+          <div id="profile-score" style="font-family:var(--mono);font-size:52px;font-weight:600;color:var(--acc);line-height:1;letter-spacing:-.035em;">72</div>
+          <div data-i18n="profile.goodStanding" style="font-size:11px;color:var(--t3);margin-top:2px;">Good standing</div>
+        </div>
+      </div>
+
+      <div class="g2 a2">
+        <div class="stack">
+          <div class="card">
+            <div class="card-t" data-i18n="profile.financialGoals" style="margin-bottom:13px;">Financial goals</div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="target" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.monthlyIncomeTarget">Monthly income target</div><div class="sr-desc" data-i18n="profile.monthlyIncomeTargetDesc">Your earning goal per month</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span id="goal-income-target" style="font-family:var(--mono);font-size:13.5px;font-weight:600;">₹67,000</span><button class="btn btn-ghost btn-sm" data-i18n="profile.edit" data-action="edit-income-target">Edit</button></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="gauge" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.monthlyExpenseCeiling">Monthly expense ceiling</div><div class="sr-desc" data-i18n="profile.monthlyExpenseCeilingDesc">Maximum you aim to spend</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span id="goal-expense-target" style="font-family:var(--mono);font-size:13.5px;font-weight:600;">₹38,000</span><button class="btn btn-ghost btn-sm" data-i18n="profile.edit" data-action="edit-spending-target">Edit</button></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="vault" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.vaultTarget">Safety Vault target</div><div class="sr-desc" data-i18n="profile.vaultTargetDesc">Emergency fund goal</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span id="goal-vault-target" style="font-family:var(--mono);font-size:13.5px;font-weight:600;">₹30,000</span><button class="btn btn-ghost btn-sm" data-i18n="profile.edit" data-action="edit-vault-goal">Edit</button></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="shield" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.minimumRunway">Minimum runway</div><div class="sr-desc" data-i18n="profile.minimumRunwayDesc">Alert threshold in months</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span id="goal-runway-target" style="font-family:var(--mono);font-size:13.5px;font-weight:600;">2.0 mo</span><button class="btn btn-ghost btn-sm" data-i18n="profile.edit" data-action="edit-runway-target">Edit</button></div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-t" data-i18n="profile.incomeProfile" style="margin-bottom:13px;">Income profile</div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="briefcase" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.workType">Work type</div><div class="sr-desc" data-i18n="profile.workTypeDesc">Freelance setup</div></div></div><span data-i18n="profile.freelancer" style="font-size:13px;color:var(--t2);">Freelancer</span></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="calendar" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.paymentFrequency">Payment frequency</div><div class="sr-desc" data-i18n="profile.paymentFrequencyDesc">Income cadence</div></div></div><span data-i18n="profile.irregular" style="font-size:13px;color:var(--t2);">Irregular</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-t" data-i18n="profile.appearance" style="margin-bottom:12px;">Appearance</div>
+            <div data-i18n="profile.appearanceDesc" style="font-size:11.5px;color:var(--t3);margin-bottom:10px;line-height:1.55;">Choose your workspace theme.</div>
+            <div style="display:flex;gap:6px;">
+              <button class="theme-btn" data-theme-btn="dark" data-i18n="theme.dark" onclick="applyTheme('dark')" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--bdr);font-size:12.5px;font-weight:600;">Dark</button>
+              <button class="theme-btn" data-theme-btn="light" data-i18n="theme.light" onclick="applyTheme('light')" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--bdr);font-size:12.5px;font-weight:600;">Light</button>
+              <button class="theme-btn" data-theme-btn="paper" data-i18n="theme.paper" onclick="applyTheme('paper')" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--bdr);font-size:12.5px;font-weight:600;">Paper</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card">
+            <div class="card-t" data-i18n="profile.notifications" style="margin-bottom:12px;">Notifications</div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="bell" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.dailySummary">Daily summary</div><div class="sr-desc" data-i18n="profile.dailySummaryDesc">Morning overview of your finances</div></div></div><div class="toggle on" data-key="notifications" data-sub="daily"></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="gauge" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.spendingAlerts">Spending alerts</div><div class="sr-desc" data-i18n="profile.spendingAlertsDesc">When you approach your expense limit</div></div></div><div class="toggle on" data-key="notifications" data-sub="spending"></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="forecast" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.highIncomeAlerts">High-income day alerts</div><div class="sr-desc" data-i18n="profile.highIncomeAlertsDesc">24 hours before predicted peaks</div></div></div><div class="toggle on" data-key="notifications" data-sub="peakDay"></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="calendar" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.weeklyDigest">Weekly digest</div><div class="sr-desc" data-i18n="profile.weeklyDigestDesc">Sunday summary</div></div></div><div class="toggle" data-key="notifications" data-sub="weekly"></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="calendar" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.breakReminders">Break reminders</div><div class="sr-desc" data-i18n="profile.breakRemindersDesc">Suggest rest on low-income windows</div></div></div><div class="toggle on" data-key="notifications" data-sub="breakRemind"></div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-t" data-i18n="profile.security" style="margin-bottom:12px;">Security</div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="lock" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.biometricLock">Biometric lock</div></div></div><div class="toggle on" data-key="security" data-sub="biometric"></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="shield" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.twoFactor">Two-factor authentication</div></div></div><div class="toggle on" data-key="security" data-sub="twoFactor"></div></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="download" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.exportAllData">Export all data</div></div></div><button class="btn btn-secondary btn-sm" data-i18n="dashboard.exportCsv" data-action="export">Export CSV</button></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" data-icon="refresh" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.resetAppStats">Reset app stats</div><div class="sr-desc" data-i18n="profile.resetAppStatsDesc">Restore the demo numbers and charts</div></div></div><button class="btn btn-secondary btn-sm" data-i18n="profile.reset" data-action="reset-stats">Reset</button></div>
+            <div class="sr"><div class="sr-info"><div class="sr-icon" style="color:var(--red);" data-icon="trash" data-icon-size="15"></div><div><div class="sr-name" data-i18n="profile.deleteAccount" style="color:var(--red);">Delete account</div><div class="sr-desc" data-i18n="profile.deleteAccountDesc">Reset local Flux data</div></div></div><button class="btn btn-danger btn-sm" data-i18n="profile.delete" data-action="delete-account">Delete</button></div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;"><div class="card-t" data-i18n="profile.achievements">Achievements</div><span class="badge bl">5 / 12</span></div>
+            <div class="li"><div class="li-icon" style="background:var(--grnd);" data-icon="plus" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="profile.firstStep">First Step</div><div class="li-meta" data-i18n="profile.firstStepDesc">Made first vault deposit</div></div><span class="badge bg" data-i18n="profile.earned">Earned</span></div>
+            <div class="li"><div class="li-icon" style="background:var(--accd);" data-icon="forecast" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="profile.streakMaster">Streak Master</div><div class="li-meta" data-i18n="profile.streakMasterDesc">30 consecutive income days</div></div><span class="badge bg" data-i18n="profile.earned">Earned</span></div>
+            <div class="li"><div class="li-icon" style="background:var(--ambd);" data-icon="calendar" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="profile.smartBreak">Smart Break</div><div class="li-meta" data-i18n="profile.smartBreakDesc">Break Planner used 3+ times</div></div><span class="badge bg" data-i18n="profile.earned">Earned</span></div>
+            <div class="li" style="opacity:.36;"><div class="li-icon" data-icon="vault" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="profile.vaultMaster">Vault Master</div><div class="li-meta" data-i18n="profile.vaultMasterDesc">Save ₹50,000 total</div></div><span class="badge bk" data-i18n="vault.locked">Locked</span></div>
+            <div class="li" style="border:none;opacity:.36;"><div class="li-icon" data-icon="gauge" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="profile.zeroOverspend">Zero Overspend</div><div class="li-meta" data-i18n="profile.zeroOverspendDesc">3 months under expense ceiling</div></div><span class="badge bk" data-i18n="vault.locked">Locked</span></div>
+          </div>
+
+          <a href="index.html" class="btn btn-ghost btn-full" data-i18n="common.signOut" data-action="signout" style="border:1px solid var(--bdr);color:var(--red);">Sign out</a>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+<div class="chat-fab" id="chat-fab"></div>
+<nav class="mobile-nav" id="mobile-nav"></nav>
+<script src="js/flux.js"></script>
+<script>
+renderTopbar('Profile');
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title data-i18n="breakPlanner.documentTitle">Flux - Break Planner</title>
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div><h1 class="page-title" data-i18n="nav.break">Break Planner</h1><p class="page-sub" data-i18n="breakPlanner.pageSub">Model the cost of time off before you commit</p></div>
+        <span class="badge bl" data-i18n="breakPlanner.aiPowered">AI-powered</span>
+      </div>
+    </div>
+    <div class="page-body">
+
+      <div class="runway-card mb2 a1" style="display:flex;align-items:center;gap:28px;flex-wrap:wrap;padding:24px 28px;">
+        <div style="position:relative;z-index:1;">
+          <div data-i18n="breakPlanner.currentRunway" style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.6);margin-bottom:6px;">Current financial runway</div>
+          <div id="break-current-runway" style="font-family:var(--mono);font-size:42px;font-weight:600;color:#fff;line-height:1;letter-spacing:-.035em;">2.6 months</div>
+          <div id="break-window-copy" style="font-size:11.5px;color:rgba(255,255,255,.55);margin-top:5px;">Numbers update live below.</div>
+        </div>
+        <div style="width:1px;height:52px;background:rgba(255,255,255,.15);flex-shrink:0;position:relative;z-index:1;"></div>
+        <div style="display:flex;gap:12px;position:relative;z-index:1;flex-wrap:wrap;">
+          <div style="text-align:center;padding:12px 20px;background:rgba(255,255,255,.12);border-radius:10px;">
+            <div data-i18n="breakPlanner.afterBreak" style="font-size:10px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">After break</div>
+            <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:#fff;transition:color .25s;" id="break-runway-after">-</div>
+          </div>
+          <div style="text-align:center;padding:12px 20px;background:rgba(255,255,255,.12);border-radius:10px;">
+            <div data-i18n="breakPlanner.change" style="font-size:10px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Change</div>
+            <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:#fff;transition:color .25s;" id="break-runway-delta">-</div>
+          </div>
+        </div>
+        <div data-i18n="breakPlanner.bannerHint" style="margin-left:auto;position:relative;z-index:1;font-size:11.5px;color:rgba(255,255,255,.45);max-width:200px;line-height:1.6;">Pick a start date, click any low-pressure day in the calendar, and rerun the scenario if you want a locked result card.</div>
+      </div>
+
+      <div class="g32 mb2 a2">
+        <div class="card">
+          <div class="card-t" data-i18n="breakPlanner.configure" style="margin-bottom:3px;">Configure your break</div>
+          <div class="card-s" data-i18n="breakPlanner.configureSub" style="margin-bottom:20px;">Every change updates the runway numbers above and the projection below</div>
+
+          <div style="margin-bottom:18px;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;">
+              <label class="form-label" data-i18n="mobile.duration" style="margin:0;">Duration</label>
+              <span style="font-family:var(--mono);font-size:30px;font-weight:600;color:var(--t1);line-height:1;" id="days-val">7 days</span>
+            </div>
+            <input type="range" id="days-slider" min="1" max="21" value="7"/>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-top:4px;"><span data-i18n="breakPlanner.oneDay">1 day</span><span data-i18n="breakPlanner.sevenDays">7 days</span><span data-i18n="breakPlanner.twentyOneDays">21 days</span></div>
+          </div>
+
+          <div class="div"></div>
+
+          <div style="margin-bottom:18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+              <label class="form-label" data-i18n="breakPlanner.dailySpendDuringBreak" style="margin:0;">Daily spend during break</label>
+              <span style="font-family:var(--mono);font-size:17px;font-weight:600;" id="exp-val">₹1,200</span>
+            </div>
+            <input type="range" id="exp-slider" min="500" max="5000" value="1200" step="100"/>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-top:4px;"><span>₹500</span><span>₹5,000</span></div>
+          </div>
+
+          <div class="div"></div>
+
+          <div style="margin-bottom:18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+              <label class="form-label" data-i18n="breakPlanner.startDate" style="margin:0;">Start date</label>
+              <span style="font-size:14px;font-weight:600;" id="start-val">In 3 days</span>
+            </div>
+            <input type="range" id="start-slider" min="0" max="13" value="3"/>
+          </div>
+
+          <div class="div"></div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;margin-bottom:18px;">
+            <div>
+              <div data-i18n="breakPlanner.drawFromVault" style="font-size:13.5px;font-weight:500;color:var(--t1);">Draw from Safety Vault</div>
+              <div data-i18n="breakPlanner.drawFromVaultSub" style="font-size:11px;color:var(--t3);margin-top:2px;">Use vault only if daily cash runs short</div>
+            </div>
+            <div class="toggle on" id="vault-toggle"></div>
+          </div>
+
+          <button class="btn btn-primary btn-full" id="run-sim-btn" data-i18n="breakPlanner.runSimulation" data-action="run-simulation" style="font-size:13px;">Run simulation</button>
+        </div>
+
+        <div class="stack">
+          <div class="card card-sm" id="results-card">
+            <div class="card-t" data-i18n="breakPlanner.simulationResults" style="margin-bottom:14px;">Simulation results</div>
+            <div id="break-result-content" data-ran="0" style="text-align:center;padding:30px 0;color:var(--t3);">
+              <div data-i18n="breakPlanner.plan" style="font-size:32px;margin-bottom:10px;opacity:.35;">Plan</div>
+              <div data-i18n="breakPlanner.planHint" style="font-size:12.5px;line-height:1.6;">Move the sliders or tap a day in the calendar, then run the simulation to pin the current break scenario.</div>
+            </div>
+          </div>
+
+          <div class="card card-sm">
+            <div class="card-t" data-i18n="breakPlanner.recommendedWindows" style="margin-bottom:3px;">Recommended windows</div>
+            <div class="card-s" data-i18n="breakPlanner.lowPressureDates" style="margin-bottom:13px;">Low-pressure dates</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;" id="cal-grid"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--t3);">
+              <span data-i18n="breakPlanner.tapDayHint">Tap a day to move the break start date instantly</span>
+              <span id="break-best-window">Mar 21-23</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card a3">
+        <div class="card-h">
+          <div><div class="card-t" data-i18n="breakPlanner.cashAndVaultProjection">Cash and vault projection</div><div class="card-s" id="chart-sub">Impact over a 7-day break</div></div>
+          <div style="display:flex;gap:14px;font-size:11px;align-items:center;">
+            <span style="display:flex;align-items:center;gap:5px;color:var(--t3);"><span style="width:14px;height:2px;background:var(--red);display:inline-block;border-radius:3px;"></span><span data-i18n="breakPlanner.availableCash">Available cash</span></span>
+            <span style="display:flex;align-items:center;gap:5px;color:var(--t3);"><span style="width:14px;height:2px;background:var(--acc);display:inline-block;border-radius:3px;"></span><span data-i18n="breakPlanner.vaultBalance">Vault balance</span></span>
+          </div>
+        </div>
+        <canvas id="proj-chart" style="height:170px;"></canvas>
+      </div>
+
+    </div>
+  </main>
+</div>
+<div class="chat-fab" id="chat-fab"></div>
+<nav class="mobile-nav" id="mobile-nav"></nav>
+<script src="js/flux.js"></script>
+<script>
+renderTopbar('Break Planner');
+</script>
+</body>
+</html>

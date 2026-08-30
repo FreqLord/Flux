@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title data-i18n="expense.documentTitle">Flux - Spending</title>
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div><h1 class="page-title" data-i18n="nav.spending">Spending</h1><p class="page-sub" id="exp-header-period">March 2026 · 18 days in · 13 days remaining</p></div>
+        <button class="btn btn-secondary btn-sm" data-i18n="expense.addExpense" data-action="add-expense">Add expense</button>
+      </div>
+    </div>
+    <div class="page-body">
+
+      <div class="g32 mb2 a1">
+        <div class="card">
+          <div class="card-h">
+            <div><div class="card-t" data-i18n="expense.spendingMeter">Spending meter</div><div class="card-s" id="exp-spending-sub">₹31,400 spent of ₹48,200 income</div></div>
+            <span class="badge ba" id="exp-zone-badge">Moderate zone</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:30px;flex-wrap:wrap;">
+            <div class="ring-w" style="flex-shrink:0;">
+              <svg id="exp-ring" width="155" height="155" viewBox="0 0 155 155">
+                <circle cx="77.5" cy="77.5" r="64" stroke="var(--bdr)" stroke-width="12" fill="none"/>
+                <circle class="ring-fill" cx="77.5" cy="77.5" r="64" stroke="var(--amb)" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="402.1" stroke-dashoffset="140.7" style="transition:stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1),stroke .4s;"/>
+              </svg>
+              <div class="ring-txt">
+                <div class="ring-v" id="exp-pct-text">65%</div>
+                <div class="ring-l" data-i18n="expense.spent">spent</div>
+              </div>
+            </div>
+            <div style="flex:1;min-width:180px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+                <div style="padding:11px 13px;background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--r);"><div class="label-sm" data-i18n="expense.spent" style="margin-bottom:3px;">Spent</div><div style="font-family:var(--mono);font-size:18px;font-weight:600;color:var(--red);" id="exp-spent">₹31,400</div></div>
+                <div style="padding:11px 13px;background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--r);"><div class="label-sm" data-i18n="mobile.remaining" style="margin-bottom:3px;">Remaining</div><div style="font-family:var(--mono);font-size:18px;font-weight:600;color:var(--grn);" id="exp-remaining">₹16,800</div></div>
+                <div style="padding:11px 13px;background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--r);"><div class="label-sm" data-i18n="mobile.dailyTarget" style="margin-bottom:3px;">Daily target</div><div style="font-family:var(--mono);font-size:18px;font-weight:600;" id="exp-daily-target">₹1,560</div></div>
+                <div style="padding:11px 13px;background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--r);"><div class="label-sm" data-i18n="expense.daysLeft" style="margin-bottom:3px;">Days left</div><div style="font-family:var(--mono);font-size:18px;font-weight:600;" id="exp-days-left">13</div></div>
+              </div>
+              <div style="margin-bottom:8px;"><div class="label-sm" data-i18n="expense.spendingZone" style="margin-bottom:6px;">Spending zone</div>
+                <div class="zone-bar" style="margin-bottom:5px;"><div class="zs zs-safe"></div><div class="zs zs-mod"></div><div class="zs zs-risk"></div></div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-bottom:6px;"><span data-i18n="expense.safeBand">Safe &lt;50%</span><span data-i18n="expense.moderateBand">Moderate 50-70%</span><span data-i18n="expense.riskBand">Risk &gt;70%</span></div>
+              </div>
+              <div class="ins ins-amb" style="margin:0;">
+                <div class="ins-h" id="exp-zone-desc">You are in Moderate at 65%</div>
+                <div class="ins-b" id="exp-insight">Spend no more than <strong>₹1,560/day</strong> to finish in the Safe zone with 13 days remaining.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="card card-sm">
+            <div class="card-t" data-i18n="expense.financialRatios" style="margin-bottom:12px;">Financial ratios</div>
+            <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="expense.expenseRatio">Expense ratio</span><span id="exp-ratio" style="font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--amb);">65%</span></div>
+            <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="expense.savingsRate">Savings rate</span><span id="exp-savings-rate" style="font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--grn);">25%</span></div>
+            <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="expense.vaultContribution">Vault contribution</span><span id="exp-vault-contribution" style="font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--teal);">10%</span></div>
+            <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="expense.targetRatio">Target ratio</span><span id="exp-target-ratio" style="font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--t3);">≤60%</span></div>
+          </div>
+          <div class="ins ins-acc" style="margin:0;padding:12px 14px;">
+            <div class="ins-h" data-i18n="expense.recommendedAction">Recommended action</div>
+            <div class="ins-b" data-i18n="expense.recommendedActionBody">Review category pressure and log anything still missing.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb2 a2">
+        <div class="card-h"><div><div class="card-t" data-i18n="expense.categoryBreakdown">Category breakdown</div><div class="card-s" id="exp-category-sub">March spending vs monthly limits</div></div></div>
+        <table class="table"><thead><tr><th data-i18n="table.category">Category</th><th data-i18n="expense.spent">Spent</th><th data-i18n="table.limit">Limit</th><th data-i18n="table.usage" style="width:38%;">Usage</th><th data-i18n="table.status">Status</th></tr></thead>
+          <tbody id="cat-table"></tbody>
+        </table>
+      </div>
+
+      <div class="card a3">
+        <div class="card-h">
+          <div><div class="card-t" data-i18n="mobile.dailySpending">Daily spending</div><div class="card-s" data-i18n="expense.dailyPace">Daily pace</div></div>
+          <div style="display:flex;gap:12px;font-size:11px;align-items:center;"><span style="display:flex;align-items:center;gap:5px;color:var(--t3);"><span style="width:12px;height:0;border-top:2px dashed var(--acc);display:inline-block;"></span><span data-i18n="mobile.dailyTarget">Daily target</span></span></div>
+        </div>
+        <canvas id="daily-chart" style="height:165px;"></canvas>
+      </div>
+
+    </div>
+  </main>
+</div>
+<div class="chat-fab" id="chat-fab"></div>
+<nav class="mobile-nav" id="mobile-nav"></nav>
+<script src="js/flux.js"></script>
+<script>
+renderTopbar('Spending');
+</script>
+</body>
+</html>

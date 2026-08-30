@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title data-i18n="vault.documentTitle">Flux - Safety Vault</title>
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div><h1 class="page-title" data-i18n="nav.vault">Safety Vault</h1><p class="page-sub" data-i18n="vault.pageSub">Your automated financial safety net</p></div>
+        <span class="badge bt">4.2% p.a.</span>
+      </div>
+    </div>
+    <div class="page-body">
+
+      <div class="vault-banner mb2 a1">
+        <div style="position:relative;z-index:1;">
+          <div class="vault-lbl" data-i18n="vault.currentBalance">Current vault balance</div>
+          <div class="vault-amt" id="vault-banner-amt" data-count="12100" data-prefix="₹">₹0</div>
+          <div class="vault-sub" id="vault-banner-sub">Covers approximately 33 baseline days at your current reserve requirement.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;position:relative;z-index:1;align-items:flex-end;">
+          <div style="display:flex;gap:8px;">
+            <button class="btn" data-i18n="common.deposit" style="background:rgba(255,255,255,.16);color:white;border:1px solid rgba(255,255,255,.26);" data-action="deposit">Deposit</button>
+            <button class="btn" data-i18n="common.withdraw" style="background:rgba(255,255,255,.10);color:white;border:1px solid rgba(255,255,255,.18);" data-action="withdraw">Withdraw</button>
+          </div>
+          <div style="width:220px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.58);margin-bottom:5px;">
+              <span id="vault-progress-label">Progress to ₹30,000 goal</span>
+              <span id="vault-prog-pct">40%</span>
+            </div>
+            <div style="height:5px;background:rgba(255,255,255,.18);border-radius:100px;overflow:hidden;">
+              <div id="vault-prog-bar" style="width:40%;height:100%;background:rgba(255,255,255,.85);border-radius:100px;transition:width 1.2s cubic-bezier(.4,0,.2,1);"></div>
+            </div>
+            <div id="vault-goal-copy" style="font-size:10px;color:rgba(255,255,255,.42);margin-top:4px;">Target progress - <span id="vault-goal-pct">40%</span> reached</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="g3 mb2 a2">
+        <div class="card">
+          <div class="card-t" data-i18n="vault.statistics" style="margin-bottom:13px;">Vault statistics</div>
+          <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="vault.totalDeposited">Total deposited</span><span id="vault-total-deposited" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--grn);">₹18,400</span></div>
+          <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="vault.totalWithdrawn">Total withdrawn</span><span id="vault-total-withdrawn" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red);">₹6,300</span></div>
+          <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="vault.interestEarned">Interest earned</span><span id="vault-interest-earned" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--teal);">₹512</span></div>
+          <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="vault.autoSavedThisMonth">Auto-saved this month</span><span id="vault-auto-saved" style="font-family:var(--mono);font-size:13px;font-weight:600;">₹3,200</span></div>
+          <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="vault.nextAutoSave">Next auto-save</span><span id="vault-next-save" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--acc);">₹800 in 2 days</span></div>
+          <div class="sr" style="padding:9px 0;"><span class="body-sm" data-i18n="vault.financialRunway">Financial runway</span><span id="vault-runway" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--teal);">2.6 months</span></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;">
+            <div class="card-t" data-i18n="vault.autoSaveRules">Auto-save rules</div><span class="badge bg" id="vault-rules-count">3 active</span>
+          </div>
+          <div class="li">
+            <div class="li-icon" style="background:var(--grnd);color:var(--grn);" data-icon="forecast" data-icon-size="15"></div>
+            <div class="li-body"><div class="li-name" data-i18n="vault.ruleHighIncome">High income days</div><div class="li-meta" data-i18n="vault.ruleHighIncomeMeta">20% when daily income exceeds ₹8,000</div></div>
+            <div class="toggle on" data-key="vaultRules" data-sub="highIncome"></div>
+          </div>
+          <div class="li">
+            <div class="li-icon" style="background:var(--accd);color:var(--acc);" data-icon="plus" data-icon-size="15"></div>
+            <div class="li-body"><div class="li-name" data-i18n="vault.ruleSurplus">Monthly surplus</div><div class="li-meta" data-i18n="vault.ruleSurplusMeta">50% of income above ₹40,000/month</div></div>
+            <div class="toggle on" data-key="vaultRules" data-sub="surplus"></div>
+          </div>
+          <div class="li">
+            <div class="li-icon" style="background:var(--ambd);color:var(--amb);" data-icon="target" data-icon-size="15"></div>
+            <div class="li-body"><div class="li-name" data-i18n="vault.ruleGoalBooster">Goal booster</div><div class="li-meta" data-i18n="vault.ruleGoalBoosterMeta">₹500 every week until vault reaches ₹30,000</div></div>
+            <div class="toggle on" data-key="vaultRules" data-sub="goalBooster"></div>
+          </div>
+          <div class="li" style="border:none;opacity:.48;">
+            <div class="li-icon" style="background:var(--bg3);color:var(--t3);" data-icon="moon" data-icon-size="15"></div>
+            <div class="li-body"><div class="li-name" data-i18n="vault.ruleNightSave">Night-time save</div><div class="li-meta" data-i18n="vault.ruleNightSaveMeta">₹200 automatically every evening</div></div>
+            <div class="toggle" data-key="vaultRules" data-sub="nightSave"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-t" data-i18n="vault.milestones" style="margin-bottom:13px;">Milestones</div>
+          <div class="li"><div class="li-icon" style="background:var(--grnd);" data-icon="plus" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="vault.firstDeposit">First deposit</div><div class="li-meta" data-i18n="vault.firstDepositMeta">₹500 saved</div></div><span class="badge bg" data-i18n="vault.done">Done</span></div>
+          <div class="li"><div class="li-icon" style="background:var(--grnd);" data-icon="shield" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="vault.oneWeekBuffer">One-week buffer</div><div class="li-meta" data-i18n="vault.oneWeekBufferMeta">₹7,000 saved</div></div><span class="badge bg" data-i18n="vault.done">Done</span></div>
+          <div class="li"><div class="li-icon" style="background:var(--accd);" data-icon="target" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="vault.oneMonthBuffer">One-month buffer</div><div class="li-meta" id="vault-milestone-goal">₹30,000 goal</div></div>
+            <div style="text-align:right;"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--acc);" id="vault-milestone-pct">40%</div><div data-i18n="vault.currentProgress" style="font-size:10px;color:var(--t3);">Current progress</div></div>
+          </div>
+          <div class="li" style="border:none;opacity:.32;"><div class="li-icon" style="background:var(--bg3);" data-icon="vault" data-icon-size="15"></div><div class="li-body"><div class="li-name" data-i18n="vault.threeMonthFund">Three-month fund</div><div class="li-meta" data-i18n="vault.threeMonthFundMeta">Longer emergency reserve</div></div><span data-i18n="vault.locked" style="font-size:11px;color:var(--t3);">Locked</span></div>
+        </div>
+      </div>
+
+      <div class="g32 a3">
+        <div class="card card-flush">
+          <div style="padding:14px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;">
+            <div><div class="card-t" data-i18n="vault.transactions">Vault transactions</div><div class="card-s" data-i18n="vault.recentActivity">Most recent activity</div></div>
+          </div>
+          <table class="table">
+            <thead><tr><th data-i18n="table.description">Description</th><th data-i18n="table.date">Date</th><th data-i18n="table.type">Type</th><th data-i18n="table.amount" style="text-align:right;">Amount</th></tr></thead>
+            <tbody id="vault-transactions">
+              <tr><td class="td-m">Auto-save - High income day</td><td>Mar 13</td><td><span class="badge bg">Auto</span></td><td class="td-n" style="text-align:right;color:var(--grn);">+₹2,400</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="stack">
+          <div class="card">
+            <div class="card-t" data-i18n="vault.growth" style="margin-bottom:3px;">Vault growth</div>
+            <div class="card-s" data-i18n="vault.growthSub" style="margin-bottom:14px;">October 2025 through March 2026</div>
+            <canvas id="vault-chart" style="height:185px;"></canvas>
+          </div>
+          <div class="ins ins-grn" style="margin:0;">
+            <div class="ins-h" data-i18n="vault.onTrack">On track</div>
+            <div class="ins-b" id="vault-projection-insight">At the current auto-save pace, you will reach the one-month buffer goal in about 6 months.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="chat-fab" id="chat-fab"></div>
+<nav class="mobile-nav" id="mobile-nav"></nav>
+<script src="js/flux.js"></script>
+<script>
+renderTopbar('Safety Vault');
+</script>
+</body>
+</html>

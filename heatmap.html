@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title data-i18n="forecast.documentTitle">Flux - Income Forecast</title>
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div>
+          <h1 class="page-title" data-i18n="nav.forecast">Income Forecast</h1>
+          <p class="page-sub" id="forecast-period">30-day earning probability model · March 2026 · 94% historical accuracy</p>
+        </div>
+        <span class="badge bg"><span class="dot dot-live"></span>&nbsp;<span data-i18n="common.live">Live</span></span>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="g4 mb2 a1">
+        <div class="metric-card">
+          <div class="metric-lbl" data-i18n="forecast.predictedMonthTotal">Predicted month total</div>
+          <div class="metric-val" id="forecast-total" style="color:var(--acc);">~₹62,000</div>
+          <div class="metric-d dp" id="forecast-pace">Exceeds ₹48,200 pace</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-lbl" data-i18n="forecast.highIncomeDays">High-income days</div>
+          <div class="metric-val" id="forecast-peak-days">8</div>
+          <div class="metric-d dz" id="forecast-peak-days-sub">of 31 days in March</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-lbl" data-i18n="forecast.incomeRange">Income range (90% CI)</div>
+          <div class="metric-val" id="forecast-range" style="font-size:21px;">₹54k-₹70k</div>
+          <div class="metric-d dz" data-i18n="forecast.confidenceBand">model confidence band</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-lbl" data-i18n="forecast.volatilityIndex">Volatility index</div>
+          <div class="metric-val" id="forecast-volatility" style="color:var(--amb);">Moderate</div>
+          <div class="metric-d dz" id="forecast-volatility-note">±31% month-to-month</div>
+        </div>
+      </div>
+
+      <div class="g32 mb2 a2">
+        <div class="card">
+          <div class="card-h">
+            <div>
+              <div class="card-t" id="forecast-calendar-title">March 2026 earning probability calendar</div>
+              <div class="card-s" data-i18n="forecast.dailyOpportunityMap">Daily opportunity map</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;">
+              <span data-i18n="forecast.none" style="font-size:10px;color:var(--t3);">None</span>
+              <div style="display:flex;gap:2px;">
+                <div style="width:12px;height:12px;border-radius:3px;" class="hcell-0"></div>
+                <div style="width:12px;height:12px;border-radius:3px;" class="hcell-1"></div>
+                <div style="width:12px;height:12px;border-radius:3px;" class="hcell-3"></div>
+                <div style="width:12px;height:12px;border-radius:3px;" class="hcell-5"></div>
+              </div>
+              <span data-i18n="forecast.peak" style="font-size:10px;color:var(--t3);">Peak</span>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:5px;">
+            <div data-i18n="weekday.mon" style="text-align:center;font-size:10px;font-weight:700;color:var(--t3);">Mon</div>
+            <div data-i18n="weekday.tue" style="text-align:center;font-size:10px;font-weight:700;color:var(--t3);">Tue</div>
+            <div data-i18n="weekday.wed" style="text-align:center;font-size:10px;font-weight:700;color:var(--t3);">Wed</div>
+            <div data-i18n="weekday.thu" style="text-align:center;font-size:10px;font-weight:700;color:var(--t3);">Thu</div>
+            <div data-i18n="weekday.fri" style="text-align:center;font-size:10px;font-weight:700;color:var(--t3);">Fri</div>
+            <div data-i18n="weekday.sat" style="text-align:center;font-size:10px;font-weight:700;color:var(--t3);">Sat</div>
+            <div data-i18n="weekday.sun" style="text-align:center;font-size:10px;font-weight:700;color:var(--t3);">Sun</div>
+          </div>
+
+          <div class="hmap" id="heat-grid"></div>
+
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px;padding-top:16px;border-top:1px solid var(--bdr);">
+            <div class="stat-callout"><span class="stat-n" id="forecast-peak-stat" style="color:var(--acc);">8</span><span class="stat-l" data-i18n="forecast.peakDays">Peak days</span></div>
+            <div class="stat-callout"><span class="stat-n" id="forecast-good-stat">7</span><span class="stat-l" data-i18n="forecast.goodDays">Good days</span></div>
+            <div class="stat-callout"><span class="stat-n" id="forecast-slow-stat" style="color:var(--amb);">7</span><span class="stat-l" data-i18n="forecast.slowDays">Slow days</span></div>
+            <div class="stat-callout"><span class="stat-n" id="forecast-rest-stat" style="color:var(--t3);">9</span><span class="stat-l" data-i18n="forecast.restDays">Rest days</span></div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card card-sm">
+            <div class="card-t" data-i18n="forecast.incomeTiers" style="margin-bottom:10px;">Income tiers</div>
+            <div class="li">
+              <div class="li-icon" style="background:var(--accd);color:var(--acc);" data-icon="forecast" data-icon-size="15"></div>
+              <div class="li-body"><div class="li-name" data-i18n="forecast.peakDays">Peak days</div><div class="li-meta" data-i18n="forecast.peakMeta">₹8,000+ · 80-95% probability</div></div>
+              <div class="li-val" id="forecast-tier-peak">8 this month</div>
+            </div>
+            <div class="li">
+              <div class="li-icon" style="background:var(--grnd);color:var(--grn);" data-icon="target" data-icon-size="15"></div>
+              <div class="li-body"><div class="li-name" data-i18n="forecast.goodDays">Good days</div><div class="li-meta" data-i18n="forecast.goodMeta">₹4,000-₹8,000 · 55-80% probability</div></div>
+              <div class="li-val" id="forecast-tier-good">7 this month</div>
+            </div>
+            <div class="li">
+              <div class="li-icon" style="background:var(--ambd);color:var(--amb);" data-icon="calendar" data-icon-size="15"></div>
+              <div class="li-body"><div class="li-name" data-i18n="forecast.slowDays">Slow days</div><div class="li-meta" data-i18n="forecast.slowMeta">₹1,500-₹4,000 · 30-55% probability</div></div>
+              <div class="li-val" id="forecast-tier-slow">7 this month</div>
+            </div>
+            <div class="li" style="border:none;">
+              <div class="li-icon" style="background:var(--bg3);color:var(--t3);" data-icon="log" data-icon-size="15"></div>
+              <div class="li-body"><div class="li-name" data-i18n="forecast.restDays">Rest days</div><div class="li-meta" data-i18n="forecast.restMeta">Under ₹1,500 · under 30% probability</div></div>
+              <div class="li-val" id="forecast-tier-rest">9 this month</div>
+            </div>
+          </div>
+
+          <div class="card card-sm">
+            <div class="card-t" data-i18n="forecast.forecastSignals" style="margin-bottom:10px;">Forecast signals</div>
+            <div class="ins ins-acc" style="margin-bottom:7px;">
+              <div class="ins-h" data-i18n="mobile.nextPeak">Next peak</div>
+              <div class="ins-b" id="forecast-next-peak">Thu Mar 19</div>
+            </div>
+            <div class="ins ins-grn" style="margin-bottom:7px;">
+              <div class="ins-h" data-i18n="forecast.idealBreakWindow">Ideal break window</div>
+              <div class="ins-b" id="forecast-break-window">Mar 21-23</div>
+            </div>
+            <div class="ins ins-amb">
+              <div class="ins-h" data-i18n="forecast.slowPeriod">Slow period</div>
+              <div class="ins-b" id="forecast-slow-period">Mar 25-31</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card a3">
+        <div class="card-h">
+          <div>
+            <div class="card-t" data-i18n="forecast.actualVsPlanned">Actual vs planned income</div>
+            <div class="card-s" data-i18n="forecast.actualVsPlannedSub">Actual vs planned by week</div>
+          </div>
+          <div style="display:flex;gap:14px;font-size:11px;align-items:center;">
+            <span style="display:flex;align-items:center;gap:5px;color:var(--t3);"><span style="width:14px;height:2px;background:var(--acc);display:inline-block;border-radius:3px;"></span><span data-i18n="forecast.actual">Actual</span></span>
+            <span style="display:flex;align-items:center;gap:5px;color:var(--t3);"><span style="width:14px;height:2px;background:var(--grn);display:inline-block;border-radius:3px;"></span><span data-i18n="forecast.predicted">Predicted</span></span>
+          </div>
+        </div>
+        <canvas id="forecast-chart" style="height:165px;"></canvas>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="chat-fab" id="chat-fab"></div>
+<nav class="mobile-nav" id="mobile-nav"></nav>
+<script src="js/flux.js"></script>
+<script>
+renderTopbar('Income Forecast');
+</script>
+</body>
+</html>
