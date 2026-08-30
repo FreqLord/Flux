@@ -1,12 +1,8 @@
-<div align="center">
-
 # Flux
 
 **Financial stability for people whose income isn't stable.**
 
 Forecasting, spending pacing, and safety buffers for freelancers, gig workers, and independent professionals.
-
-</div>
 
 ---
 
@@ -36,19 +32,10 @@ Flux is built around a different question: **not "did you spend within budget?" 
 
 Flux is a Next.js (App Router) application backed by SQLite via Prisma. Under the hood:
 
-- **Forecast engine** (`src/lib/forecast.ts`) generates income projections — either from a synthetic 90-day history or a real CSV you upload — and computes a coverage ratio, projected surplus/deficit, and a recommended vault action (deposit or withdraw) for the period ahead.
+- **Forecast engine** (`src/lib/forecast.ts`) generates income projections — either from a synthetic 90-day history or a real CSV you upload — and computes a coverage ratio, projected surplus/deficit, and a recommended vault action (deposit or withdraw) for the period ahead. It uses a hybrid modeling approach (NeuralProphet-style trend/seasonality combined with gradient-boosted corrections) to produce a probability band rather than a single number.
 - **`flux-realtime`** (`mini-services/flux-realtime`) is a small standalone Socket.IO service that broadcasts live vault balance updates, forecast run completions, and chat activity to connected clients, so the dashboard's "Live" indicator is honest rather than decorative.
 - **Caddy** sits in front of both the Next.js app (port 3000) and the realtime service, routing based on an `XTransformPort` query parameter — useful for deployments where a single public port needs to reach multiple internal services.
 - **Prisma models** capture the full financial picture: `Profile`, `Snapshot`, `Transaction`, `VaultTransaction`, `Category`, `ForecastRun` / `ForecastDay`, `HeatmapDay`, `ChatMessage`, and app `Setting`s.
-
-### The predictive model
-
-Forecasting is powered by a companion project, **[Flux_AI](https://github.com/FreqLord/Flux_AI)**, which combines **NeuralProphet** and **XGBoost**:
-
-- **NeuralProphet** handles the time-series fundamentals — trend and seasonality in historical income.
-- **XGBoost** layers on top to capture nonlinear relationships and sharpen prediction accuracy via gradient-boosted decision trees.
-
-Together they estimate likely earning windows and income ranges, rather than a single naive projection, giving Flux's forecast a probability band instead of one number.
 
 ## Tech stack
 
@@ -149,7 +136,6 @@ Flux/
 | `bun run db:migrate` | Run Prisma migrations in dev |
 | `bun run db:reset` | Reset the database |
 
-
 ## Contributors
 
 | | |
@@ -157,4 +143,3 @@ Flux/
 | **Akash Vishwakarma** | Product design, UI/UX, and frontend development — [@AkashV31](https://github.com/AkashV31) |
 | **Shreyash Tiwari** | Design and frontend collaboration — [@Shreyash-17-10](https://github.com/Shreyash-17-10) |
 | **Sushil Singh** | Predictive modeling using Prophet and XGBoost — [@FreqLord](https://github.com/FreqLord) |
-
