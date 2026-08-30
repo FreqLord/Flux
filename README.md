@@ -1,42 +1,166 @@
+<div align="center">
+
 # Flux
-Financial stability platform for freelancers and gig workers, designed to manage irregular income through forecasting, spending insights, and safety buffers.
 
+**Financial stability for people whose income isn't stable.**
 
-Flux is a project we built to support people who earn through irregular or variable income streams such as freelancers, gig workers, and independent professionals. Traditional finance tools assume a stable salary, which often makes them less useful for people whose earnings fluctuate week to week. Flux approaches this differently by focusing on **financial stability and decision-making under uncertain income**, helping users understand how their earnings, spending, and savings interact over time. 
+Forecasting, spending pacing, and safety buffers for freelancers, gig workers, and independent professionals.
 
-The platform provides a structured overview of personal finances through several connected modules. The **Dashboard** offers a quick snapshot of income, spending progress, financial runway, and recent activity so users can understand their current financial position at a glance. The **Spending section** tracks how quickly money is being used during the month and highlights safe spending limits to avoid overshooting budgets.
+</div>
 
-Flux also includes an **Income Forecast view** that visualizes potential earning opportunities across the month through probability-based calendars and projections, helping users anticipate stronger and quieter work periods. A **Break Planner** models the financial impact of taking time off, allowing users to estimate how a planned break would affect their runway and expenses before committing.
+---
 
-To help manage uncertainty, the system also introduces a **Safety Vault**, which acts as a financial buffer by storing surplus funds from higher-income periods and providing protection during slower ones. Additional sections like **Profile & Settings** allow users to define goals, targets, and preferences that shape how the system calculates and displays financial insights.
+## Why Flux
 
+Most personal finance tools are built for a fixed monthly salary landing on the same day every month. That assumption breaks down for freelancers, gig workers, and independent professionals, whose income can swing wildly week to week.
 
-## AI Forecast Model
-![Flux Forecast AI](assets/flux%20forecast%20ai.jpeg)
-<p align="center">https://github.com/FreqLord/Flux_AI - link to repository.</p>
-
-Alongside the application, a predictive modeling component was developed using **NeuralProphet and XGBoost** to analyze historical income patterns and generate probabilistic forecasts of future earnings. Prophet handles the time-series aspects such as trends and seasonality, while XGBoost captures nonlinear relationships and improves prediction accuracy through gradient-boosted decision trees. Together, these models help estimate likely earning windows and income ranges that can support more informed financial planning.
-
+Flux is built around a different question: **not "did you spend within budget?" but "can your money survive an unpredictable month?"** It turns irregular income into something you can actually plan around — forecasting what's likely to come in, pacing what goes out, and setting aside a buffer for the slow weeks.
 
 ## Features
-- Financial dashboard overview
-- Spending pacing and category tracking
-- Income forecasting visualization
-- Break planning simulation
-- Safety vault for financial buffers
-- Mobile-friendly interface
-- Ai chat for instant overview
+
+| Module | What it does |
+|---|---|
+| **Dashboard** | At-a-glance snapshot of income, spending pace, financial runway, and recent activity |
+| **Spending** | Tracks burn rate through the month against category limits, so you know when you're about to overshoot |
+| **Income Forecast** | Probability-based calendar and projections of future earnings, powered by an ML forecasting engine |
+| **Break Planner** | Simulates the financial impact of taking time off before you commit to it |
+| **Safety Vault** | Automatically routes surplus from strong-income periods into a buffer that protects you during quiet ones |
+| **Heatmap** | Visualizes earning-probability patterns across the month |
+| **AI Chat** | Conversational assistant for an instant read on your financial state |
+| **Profile & Settings** | Set income targets, spending targets, vault goals, and minimum runway |
+| **Mobile-friendly** | Dedicated mobile views alongside the full desktop dashboard |
+| **Live updates** | Real-time vault and forecast notifications over WebSockets |
+| **Import / Export** | CSV upload for real income history, JSON export/import of your full financial state |
+
+## How it works
+
+Flux is a Next.js (App Router) application backed by SQLite via Prisma. Under the hood:
+
+- **Forecast engine** (`src/lib/forecast.ts`) generates income projections — either from a synthetic 90-day history or a real CSV you upload — and computes a coverage ratio, projected surplus/deficit, and a recommended vault action (deposit or withdraw) for the period ahead.
+- **`flux-realtime`** (`mini-services/flux-realtime`) is a small standalone Socket.IO service that broadcasts live vault balance updates, forecast run completions, and chat activity to connected clients, so the dashboard's "Live" indicator is honest rather than decorative.
+- **Caddy** sits in front of both the Next.js app (port 3000) and the realtime service, routing based on an `XTransformPort` query parameter — useful for deployments where a single public port needs to reach multiple internal services.
+- **Prisma models** capture the full financial picture: `Profile`, `Snapshot`, `Transaction`, `VaultTransaction`, `Category`, `ForecastRun` / `ForecastDay`, `HeatmapDay`, `ChatMessage`, and app `Setting`s.
+
+### The predictive model
+
+Forecasting is powered by a companion project, **[Flux_AI](https://github.com/FreqLord/Flux_AI)**, which combines **NeuralProphet** and **XGBoost**:
+
+- **NeuralProphet** handles the time-series fundamentals — trend and seasonality in historical income.
+- **XGBoost** layers on top to capture nonlinear relationships and sharpen prediction accuracy via gradient-boosted decision trees.
+
+Together they estimate likely earning windows and income ranges, rather than a single naive projection, giving Flux's forecast a probability band instead of one number.
+
+## Tech stack
+
+- **Framework:** Next.js 16 (App Router), React 19, TypeScript
+- **Styling/UI:** Tailwind CSS 4, shadcn/ui, Radix UI primitives, Framer Motion, `lucide-react`
+- **Data:** Prisma ORM + SQLite, Zustand for client state, TanStack Query / TanStack Table
+- **Realtime:** Socket.IO (standalone `flux-realtime` mini-service)
+- **Auth:** NextAuth
+- **Forms & validation:** React Hook Form + Zod
+- **Runtime/tooling:** Bun, ESLint, Caddy (reverse proxy)
+
+## Getting started
+
+### Prerequisites
+
+- [Bun](https://bun.sh) (used for install, dev, and production start scripts)
+- Node.js–compatible environment (Next.js 16)
+
+### Installation
+
+```bash
+git clone https://github.com/FreqLord/Flux.git
+cd Flux
+bun install
+```
+
+### Environment
+
+Create a `.env` file in the project root:
+
+```bash
+DATABASE_URL="file:./db/custom.db"
+```
+
+### Set up the database
+
+```bash
+bun run db:generate   # generate the Prisma client
+bun run db:push        # sync the schema to SQLite
+```
+
+### Run the app
+
+```bash
+bun run dev
+```
+
+The app runs at **http://localhost:3000**.
+
+To enable live vault/forecast updates, also start the realtime service in a separate terminal:
+
+```bash
+cd mini-services/flux-realtime
+bun install
+bun run index.ts
+```
+
+It listens on **port 3003**.
+
+### Production build
+
+```bash
+bun run build
+bun run start
+```
+
+## Project structure
+
+```
+Flux/
+├── src/
+│   ├── app/                # Next.js App Router pages + API routes
+│   │   └── api/             # forecast, vault, break, chat, insights,
+│   │                        # transactions, notifications, csv import/export...
+│   ├── components/          # UI components (dashboard widgets, charts, forms)
+│   ├── hooks/                # Custom React hooks
+│   ├── lib/                  # Forecast engine, db client, seeding, utilities
+│   └── store/                 # Zustand state stores
+├── mini-services/
+│   └── flux-realtime/        # Standalone Socket.IO server for live updates
+├── examples/websocket/        # Minimal client/server WebSocket reference
+├── prisma/schema.prisma       # Database schema
+├── tests/                     # Build/runtime smoke tests
+├── Caddyfile                  # Reverse proxy config for multi-port deployment
+└── *.html, css/, js/          # Static/legacy dashboard views
+```
+
+## Available scripts
+
+| Command | Description |
+|---|---|
+| `bun run dev` | Start the Next.js dev server on port 3000 |
+| `bun run build` | Production build |
+| `bun run start` | Run the production server |
+| `bun run lint` | Run ESLint |
+| `bun run db:generate` | Generate the Prisma client |
+| `bun run db:push` | Push the Prisma schema to the database |
+| `bun run db:migrate` | Run Prisma migrations in dev |
+| `bun run db:reset` | Reset the database |
+
+## Related repositories
+
+- **[Flux_AI](https://github.com/FreqLord/Flux_AI)** — the NeuralProphet + XGBoost forecasting model behind the Income Forecast view.
 
 ## Contributors
 
-**Akash Vishwakarma**  
-Product design, UI/UX, and frontend development  
-GitHub: https://github.com/AkashV31
+| | |
+|---|---|
+| **Akash Vishwakarma** | Product design, UI/UX, and frontend development — [@AkashV31](https://github.com/AkashV31) |
+| **Shreyash Tiwari** | Design and frontend collaboration — [@Shreyash-17-10](https://github.com/Shreyash-17-10) |
+| **Sushil Singh** | Predictive modeling using Prophet and XGBoost — [@FreqLord](https://github.com/FreqLord) |
 
-**Shreyash Tiwari**  
-Design and frontend collaboration  
-GitHub: https://github.com/Shreyash-17-10
+## License
 
-**Sushil Singh**  
-Predictive modeling using Prophet and XGBoost  
-GitHub: https://github.com/FreqLord
+Released under the [MIT License](./LICENSE).
