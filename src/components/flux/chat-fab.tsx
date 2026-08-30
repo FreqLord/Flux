@@ -374,7 +374,7 @@ export function ChatFab() {
             </div>
 
             {/* suggestions */}
-            {messages.length === 0 && (
+            {true && (
               <div className="px-3 pb-2 flex flex-wrap gap-1.5">
                 {SUGGESTIONS.map((s) => (
                   <button key={s} className="badge bl" style={{ cursor: "pointer", padding: "5px 10px" }} onClick={() => send(s)} type="button" disabled={sending}>

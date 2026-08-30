@@ -346,7 +346,7 @@ export function ChatView() {
         ? { cls: "badge ba", label: "Moderate" }
         : { cls: "badge br", label: "Risk" };
 
-  const showSuggestions = messages.length < 2;
+  const showSuggestions = true;
   const showWelcome = messages.length === 0 && !sending;
   const sendDisabled = !input.trim() || sending;
   const charCount = input.length;

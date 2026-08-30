@@ -130,11 +130,11 @@ echo "[BUN] Setting up database..."
 bun run db:push
 log_step_end "bun run db:push"
 
-log_step_start "Starting Next.js dev server"
-echo "[BUN] Starting development server..."
-bun run dev &
+log_step_start "Starting Next.js server (Prod)"
+echo "[BUN] Building and starting server..."
+bun run build && bun run start &
 DEV_PID=$!
-log_step_end "Starting Next.js dev server"
+log_step_end "Starting Next.js server (Prod)"
 
 log_step_start "Waiting for Next.js dev server"
 wait_for_service "localhost" "3000" "Next.js dev server"
